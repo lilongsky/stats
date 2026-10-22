@@ -146,7 +146,7 @@ internal class Popup: PopupWrapper {
     }
 }
 
-private class CalendarView: NSStackView {
+private class CalendarView: NSStackView, NSMenuDelegate {
     private var itemSize: CGSize
     private var showWeekNumbers: Bool
     private var navigationHeightConstraint: NSLayoutConstraint?
@@ -187,7 +187,8 @@ private class CalendarView: NSStackView {
     private let anchorRow = 20
     private var rebuilding = false
     private var scrollHeightConstraint: NSLayoutConstraint?
-    private var current: NSTextField = NSTextField()
+    private let monthPicker = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let yearPicker = NSPopUpButton(frame: .zero, pullsDown: false)
     
     init(_ width: CGFloat, showWeekNumbers: Bool) {
         self.showWeekNumbers = showWeekNumbers
@@ -270,7 +271,7 @@ private class CalendarView: NSStackView {
         grid.addRow(with: headerRow)
           
         self.weekdayHeader = grid
-        self.current.stringValue = "\(Calendar.current.standaloneMonthSymbols[self.month-1]) \(self.year)"
+        self.updateNavigation()
         self.insertArrangedSubview(grid, at: 1)
         let monthStart = Calendar.current.date(from: DateComponents(year: self.year, month: self.month, day: 1)) ?? Date()
         self.rebuild(around: position?.week ?? self.weekStart(containing: monthStart), offset: position?.offset ?? 0)
@@ -387,18 +388,28 @@ private class CalendarView: NSStackView {
                 value: position.offset >= self.itemSize.height / 2 ? 13 : 6, to: position.week) else { return }
         self.monthAnchorRow = row
         let calendar = Calendar.current
-        self.year = calendar.component(.year, from: date)
-        self.month = calendar.component(.month, from: date)
-        let title = "\(calendar.standaloneMonthSymbols[self.month-1]) \(self.year)"
-        guard self.current.stringValue != title else { return }
-        self.current.stringValue = title
+        let year = calendar.component(.year, from: date)
+        let month = calendar.component(.month, from: date)
+        guard self.year != year || self.month != month else { return }
+        self.year = year
+        self.month = month
+        self.updateNavigation()
         self.dayViews.forEach { $0.setDisplayedMonth(self.month, year: self.year) }
     }
 
     private func moveMonth(_ offset: Int) {
         let calendar = Calendar.current
         guard let date = calendar.date(from: DateComponents(year: self.year, month: self.month, day: 1)),
-              let target = calendar.date(byAdding: .month, value: offset, to: date),
+              let target = calendar.date(byAdding: .month, value: offset, to: date) else { return }
+        self.jump(toYear: calendar.component(.year, from: target), month: calendar.component(.month, from: target))
+    }
+
+    private func jump(toYear year: Int, month: Int) {
+        let calendar = Calendar.current
+        guard year > 0, (1...calendar.standaloneMonthSymbols.count).contains(month),
+              let target = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+              calendar.component(.year, from: target) == year,
+              calendar.component(.month, from: target) == month,
               let firstWeek else { return }
         let targetWeek = self.weekStart(containing: target)
         let days = calendar.dateComponents([.day], from: firstWeek, to: targetWeek).day ?? 0
@@ -411,6 +422,38 @@ private class CalendarView: NSStackView {
             self.rebuild(around: targetWeek, offset: 0)
         }
     }
+
+    private func updateNavigation() {
+        self.monthPicker.selectItem(withTag: self.month)
+        if self.yearPicker.menu?.item(withTag: self.year) == nil {
+            self.yearPicker.removeAllItems()
+            self.yearPicker.addItem(withTitle: "\(self.year)")
+            self.yearPicker.lastItem?.tag = self.year
+        }
+        self.yearPicker.selectItem(withTag: self.year)
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === self.yearPicker.menu else { return }
+        // Build the scrollable native menu only when opened, not during a
+        // trackpad gesture. Reopening recenters it on the year being browsed.
+        self.yearPicker.removeAllItems()
+        for year in max(1, self.year - 50)...(self.year + 50) {
+            self.yearPicker.addItem(withTitle: "\(year)")
+            self.yearPicker.lastItem?.tag = year
+        }
+        self.yearPicker.selectItem(withTag: self.year)
+    }
+
+    @objc private func selectMonth(_ sender: NSPopUpButton) {
+        guard let month = sender.selectedItem?.tag else { return }
+        self.jump(toYear: self.year, month: month)
+    }
+
+    @objc private func selectYear(_ sender: NSPopUpButton) {
+        guard let year = sender.selectedItem?.tag else { return }
+        self.jump(toYear: year, month: self.month)
+    }
     
     private func navigation() -> NSView {
         let view = NSStackView()
@@ -419,16 +462,51 @@ private class CalendarView: NSStackView {
         self.navigationHeightConstraint = view.heightAnchor.constraint(greaterThanOrEqualToConstant: max(self.itemSize.height, 24))
         self.navigationHeightConstraint?.isActive = true
         view.orientation = .horizontal
+        view.spacing = 4
         view.edgeInsets = .init(top: 0, left: 6, bottom: 6, right: 6)
         
-        let details = NSTextField(labelWithString: "\(Calendar.current.standaloneMonthSymbols[self.month-1]) \(self.year)")
-        details.font = .systemFont(ofSize: 15, weight: .medium)
-        details.lineBreakMode = .byTruncatingTail
-        details.maximumNumberOfLines = 1
-        details.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        self.current = details
+        let details = NSStackView()
+        details.orientation = .horizontal
+        // Pop-up cells extend beyond their alignment rects. Leave enough room
+        // for two separate native hit areas, including in the borderless style.
+        details.spacing = 6
+        for (picker, label, identifier) in [
+            (self.monthPicker, "Choose month", "clock-calendar-month"),
+            (self.yearPicker, "Choose year", "clock-calendar-year")
+        ] {
+            picker.bezelStyle = .rounded
+            picker.controlSize = .small
+            picker.font = .systemFont(ofSize: 14, weight: .medium)
+            picker.isBordered = false
+            picker.autoenablesItems = false
+            picker.cell?.lineBreakMode = .byTruncatingTail
+            picker.toolTip = localizedString(label)
+            picker.setAccessibilityLabel(localizedString(label))
+            picker.identifier = NSUserInterfaceItemIdentifier(identifier)
+            picker.target = self
+        }
+        self.monthPicker.action = #selector(self.selectMonth(_:))
+        for (index, month) in Calendar.current.standaloneMonthSymbols.enumerated() {
+            self.monthPicker.addItem(withTitle: month)
+            self.monthPicker.lastItem?.tag = index + 1
+        }
+        self.monthPicker.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        self.monthPicker.widthAnchor.constraint(greaterThanOrEqualToConstant: 52).isActive = true
+        self.yearPicker.action = #selector(self.selectYear(_:))
+        self.yearPicker.menu?.delegate = self
+        self.yearPicker.setContentCompressionResistancePriority(.required, for: .horizontal)
+        self.yearPicker.widthAnchor.constraint(greaterThanOrEqualToConstant: 60).isActive = true
+        let format = DateFormatter.dateFormat(fromTemplate: "yMMMM", options: 0, locale: .current) ?? "MMMM y"
+        let yearFirst = format.range(of: "y").map { year in
+            [format.range(of: "M"), format.range(of: "L")].compactMap { $0 }
+                .allSatisfy { year.lowerBound < $0.lowerBound }
+        } ?? false
+        (yearFirst ? [self.yearPicker, self.monthPicker] : [self.monthPicker, self.yearPicker])
+            .forEach { details.addArrangedSubview($0) }
+        self.updateNavigation()
         let buttons = NSStackView()
         buttons.orientation = .horizontal
+        buttons.spacing = 4
         buttons.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         let today = NSButton(title: localizedString("Today"), target: self, action: #selector(self.goToToday))

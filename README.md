@@ -4,6 +4,8 @@ Independent fork of [exelban/stats](https://github.com/exelban/stats), based on 
 
 **[中文部署指南](README.zh-CN.md)** · **[Changes, validation and provenance](FORK.md)**
 
+In the Clock calendar, click the year or month in the header to choose it from a native macOS pop-up menu. Selecting a year keeps the month, and selecting a month keeps the year. The year list offers 50 years on either side of the displayed year and recenters whenever it opens; scrolling, arrows and Today keep both selectors in sync.
+
 ## Deployment
 
 Build locally using the steps below. This fork currently has no custom GitHub release binary. The locally validated ZIP is an ad-hoc signed development package, not a notarized public release; validation on one Mac does not establish that another Mac will allow it.

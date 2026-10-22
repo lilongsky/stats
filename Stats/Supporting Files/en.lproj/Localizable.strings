@@ -580,4 +580,6 @@
 
 /* Calendar navigation */
 "Today" = "Today";
+"Choose month" = "Choose month";
+"Choose year" = "Choose year";
 "Return to today" = "Return to today";

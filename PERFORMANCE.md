@@ -26,9 +26,20 @@ physical display frame pacing, input-to-display latency or a hardware trackpad
 gesture. Re-run the benchmark on the target system instead of treating these
 numbers as a frame-rate guarantee.
 
-The correctness checks cover 103 calendar assertions, including leap dates,
+The correctness checks cover 320 calendar assertions, including leap dates,
 year boundaries, bounded cache size, fractional-row offsets, date labels,
 tooltips, week-number toggles, hover clearing and Today marker restoration.
+They also cover native year/month control actions, distant-year jumps, menu
+preparation without selection, selector synchronization and header geometry at
+264 points. The suite passes with the development locale and process-local
+English and German overrides; for example:
+
+```sh
+python3 Tests/run-calendar-checks.py --locale en_US --language en
+python3 Tests/run-calendar-checks.py --locale de_DE --language de
+```
+
+These checks do not open a native menu or verify its pointer/keyboard tracking.
 An additional 840-step delta replay covers fast scrolling, deceleration curves,
 interrupted inertia and abrupt reversals, checking logical date displacement
 after every step. The initial replay found no date discontinuities.

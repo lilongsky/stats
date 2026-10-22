@@ -11,7 +11,7 @@ and author notices. It is not an official Stats release.
 - Popup section visibility and ordering with an actual popup preview.
 - Local SQLite history for four time ranges, mean/peak display and CSV export.
 - Sustained notification thresholds and optional per-fan temperature curves.
-- A continuous Clock calendar with a Today button, bounded reusable date views and one hover target.
+- A continuous Clock calendar with native year/month selectors, a Today button, bounded reusable date views and one hover target.
 
 The menu padding implementation probes private AppKit selectors at runtime and
 falls back to the system behavior when unavailable. It needs revalidation after
@@ -20,6 +20,14 @@ macOS changes. It does not change global menu-bar spacing preferences.
 Fan curves are disabled by default. The development machine has no controllable
 fan, so physical fan actuation was not tested. OS notification delivery was not
 triggered in the automated model checks.
+
+The calendar uses AppKit's [NSPopUpButton](https://developer.apple.com/documentation/appkit/nspopupbutton)
+for independent year and month selection, following Apple's
+[pop-up button guidance](https://developer.apple.com/design/human-interface-guidelines/pop-up-buttons).
+It retains system menu rendering, keyboard interaction and accessibility, uses
+localized month names and field order, and builds the year list only when opened.
+The calendar checks dispatch native control actions and verify date navigation
+and geometry; they do not drive pointer-based menu tracking or Escape dismissal.
 
 ## Build a separate local application
 

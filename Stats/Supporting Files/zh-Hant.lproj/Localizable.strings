@@ -580,4 +580,6 @@
 
 /* Calendar navigation */
 "Today" = "今天";
+"Choose month" = "選擇月份";
+"Choose year" = "選擇年份";
 "Return to today" = "回到今天";

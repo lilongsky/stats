@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """Compile the real Clock sources with the private calendar integration checks."""
 from pathlib import Path
+import argparse
 import subprocess
 import sys
 import tempfile
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--locale', help='Test locale, for example en_US or de_DE')
+parser.add_argument('--language', help='Preferred language, for example en or de')
+args = parser.parse_args()
 
 root = Path(__file__).resolve().parents[1]
 source_root = root / 'stats-3.0.22' if (root / 'stats-3.0.22').exists() else root
@@ -29,4 +35,9 @@ with tempfile.TemporaryDirectory(prefix='stats-calendar-checks-') as temporary:
     ]
     subprocess.run(command, check=True)
     subprocess.run([*preflight, str(executable)], check=True)
-    subprocess.run([str(executable)], check=True)
+    launch = [str(executable)]
+    if args.locale:
+        launch += ['-AppleLocale', args.locale]
+    if args.language:
+        launch += ['-AppleLanguages', f'({args.language})']
+    subprocess.run(launch, check=True)
