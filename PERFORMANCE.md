@@ -36,4 +36,6 @@ after every step. The initial replay found no date discontinuities.
 Actual running popup checks also cover rapid forward/reverse scrolling,
 sub-row positioning, the fixed weekday header/footer and the Today button.
 The automation interface does not expose a physical two-finger gesture's native
-momentum phases, so that tactile behavior needs confirmation on the device.
+momentum phases. A manual trackpad acceptance check on the development machine
+reported smooth fast scrolling and abrupt reversals. Physical display frame
+pacing was not instrumented.
