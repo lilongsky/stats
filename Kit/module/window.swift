@@ -214,7 +214,7 @@ open class Window: NSStackView {
         widgetTab.label = localizedString("Widgets")
         widgetTab.view = {
             let view = ScrollableStackView(frame: tabView.frame)
-            view.stackView.spacing = 0
+            view.stackView.spacing = 16
             self.widgetSettingsContainer = view.stackView
             self.loadWidgetSettings()
             return view
@@ -226,7 +226,7 @@ open class Window: NSStackView {
             popupTab.label = localizedString("Popup")
             popupTab.view = {
                 let view = ScrollableStackView(frame: tabView.frame)
-                view.stackView.spacing = 0
+                view.stackView.spacing = 16
                 self.popupSettingsContainer = view.stackView
                 self.loadPopupSettings()
                 return view
@@ -239,7 +239,7 @@ open class Window: NSStackView {
             notificationsTab.label = localizedString("Notifications")
             notificationsTab.view = {
                 let view = ScrollableStackView(frame: tabView.frame)
-                view.stackView.spacing = 0
+                view.stackView.spacing = 16
                 self.notificationsSettingsContainer = view.stackView
                 self.loadNotificationsSettings()
                 return view
@@ -305,13 +305,16 @@ open class Window: NSStackView {
     
     private func loadPopupSettings() {
         self.popupSettingsContainer?.subviews.forEach{ $0.removeFromSuperview() }
-        
+        var hasSettings = false
         if let popup = self.popupSettings as? PopupWrapper {
             self.popupSettingsContainer?.addArrangedSubview(popup.customizationSettings())
+            hasSettings = true
         }
         if let settingsView = self.popupSettings, let view = settingsView.settings() {
             self.popupSettingsContainer?.addArrangedSubview(view)
-        } else {
+            hasSettings = true
+        }
+        if !hasSettings {
             self.popupSettingsContainer?.addArrangedSubview(self.noPopupSettingsView)
         }
     }
@@ -664,10 +667,14 @@ private class WidgetSettings: NSStackView {
         
         self.translatesAutoresizingMaskIntoConstraints = false
         self.orientation = .vertical
-        self.spacing = 0
-        
-        self.addArrangedSubview(self.header(title, image))
+        self.alignment = .leading
+        self.spacing = 8
+
+        let header = self.header(title, image)
+        self.addArrangedSubview(header)
+        fillSettingsWidth(header, in: self)
         self.addArrangedSubview(settingsView)
+        fillSettingsWidth(settingsView, in: self)
     }
     
     required init?(coder: NSCoder) {
@@ -678,48 +685,22 @@ private class WidgetSettings: NSStackView {
         let container = NSStackView()
         container.translatesAutoresizingMaskIntoConstraints = false
         container.orientation = .horizontal
-        container.edgeInsets = NSEdgeInsets(
-            top: 6,
-            left: 0,
-            bottom: 6,
-            right: 0
-        )
-        container.spacing = 0
-        container.distribution = .equalCentering
-        
-        let content = NSStackView()
-        content.translatesAutoresizingMaskIntoConstraints = false
-        content.orientation = .vertical
-        content.distribution = .fill
-        content.spacing = 0
-        
-        let title: NSTextField = LabelField(frame: NSRect(x: 0, y: 0, width: 0, height: 0), title)
-        title.font = NSFont.systemFont(ofSize: 13, weight: .regular)
-        title.textColor = .textColor
-        
-        let imageContainer = NSStackView()
-        imageContainer.orientation = .vertical
-        imageContainer.spacing = 0
-        imageContainer.wantsLayer = true
-        imageContainer.layer?.backgroundColor = NSColor.white.cgColor
-        imageContainer.layer?.cornerRadius = 2
-        imageContainer.edgeInsets = NSEdgeInsets(
-            top: 2,
-            left: 2,
-            bottom: 2,
-            right: 2
-        )
-        
-        let imageView = NSImageView(frame: NSRect(origin: .zero, size: image.size))
+        container.alignment = .centerY
+        container.edgeInsets = NSEdgeInsets(top: 6, left: 4, bottom: 2, right: 4)
+        container.spacing = 8
+
+        let label = NSTextField(labelWithString: title)
+        label.font = .systemFont(ofSize: 13, weight: .semibold)
+        label.lineBreakMode = .byTruncatingTail
+
+        let imageView = NSImageView()
         imageView.image = image
-        
-        imageContainer.addArrangedSubview(imageView)
-        
-        content.addArrangedSubview(imageContainer)
-        content.addArrangedSubview(title)
-        
-        container.addArrangedSubview(NSView())
-        container.addArrangedSubview(content)
+        imageView.imageScaling = .scaleProportionallyDown
+        imageView.widthAnchor.constraint(equalToConstant: 32).isActive = true
+        imageView.heightAnchor.constraint(equalToConstant: 22).isActive = true
+
+        container.addArrangedSubview(imageView)
+        container.addArrangedSubview(label)
         container.addArrangedSubview(NSView())
         
         return container

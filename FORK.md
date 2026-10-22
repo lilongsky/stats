@@ -12,6 +12,7 @@ and author notices. It is not an official Stats release.
 - Local SQLite history for four time ranges, mean/peak display and CSV export.
 - Sustained notification thresholds and optional per-fan temperature curves.
 - A continuous Clock calendar with native year/month selectors, a Today button, bounded reusable date views and one hover target.
+- A labeled Settings sidebar entry, aligned settings groups and contextual native controls for widget sizing and popup shortcuts.
 
 The menu padding implementation probes private AppKit selectors at runtime and
 falls back to the system behavior when unavailable. It needs revalidation after
@@ -28,6 +29,33 @@ It retains system menu rendering, keyboard interaction and accessibility, uses
 localized month names and field order, and builds the year list only when opened.
 The calendar checks dispatch native control actions and verify date navigation
 and geometry; they do not drive pointer-based menu tracking or Escape dismissal.
+
+## Settings interface
+
+The Settings page is available in the sidebar. A compact app identity row leaves
+more room for General, Menu bar, Advanced menu bar and Settings Data groups.
+Related controls share aligned rows; explanatory captions wrap to the available
+width. Each widget has a small labeled header and its own size and spacing
+controls. Popup sections use named rows with visibility switches on the right.
+
+Each module has four independent application shortcut slots. Native macOS
+pop-up menus display application names and icons, support hiding a slot or
+choosing another application, and offer a reset for that module's tools. Size
+and spacing have a separate reset scoped to the current widget. When compact
+mode or its global default changes, the displayed switch and numeric defaults
+update together; explicit custom dimensions and spacing are retained.
+
+These changes follow the useful organization seen in iStat Menus: separate
+global and module settings, keep controls with the object they affect, and make
+reset scope clear. Controls are implemented in AppKit; proprietary UI resources
+are not reused. Offscreen checks of the reusable settings views and popup
+editors pass 69 assertions in each of Chinese and English, at 540- and 680-point
+widths in light and dark appearances. They cover alignment, wrapping, complete
+first/last table rows, section actions, tool choices and size/default/reset
+synchronization. The renderer also exposed and verified a fix for the last
+section row being clipped by automatic table insets. These are isolated views,
+not screenshots of the full application window. Live settings-window visual
+acceptance remains pending because the development Mac is locked.
 
 ## Build a separate local application
 
@@ -87,6 +115,8 @@ After building, run:
 
 ```sh
 python3 Tests/run-feature-models.py
+python3 Tests/run-settings-checks.py
+python3 Tests/run-settings-checks.py --locale en_US --language en
 python3 Tests/run-cpu-popup-checks.py
 python3 Tests/run-calendar-checks.py
 python3 Tests/run-calendar-gestures.py
@@ -106,6 +136,12 @@ content heights and section geometry. Frequency participates in customization
 and defaults to the position before top processes. Its zero-height placeholder
 also makes it configurable before the first telemetry sample. The check passes
 89 assertions, including process counts of 0, 3, 8, 10 and 20.
+
+After the shared settings layout changes, the full build, strict signature
+verification and Gatekeeper preflight passed. The settings checks above, 89 CPU
+popup checks and 320 calendar checks passed against that final build. The
+settings runner writes offscreen PNGs under the build directory by default;
+it uses isolated preferences and never opens the production settings window.
 
 ## Implementation provenance and contribution policy
 

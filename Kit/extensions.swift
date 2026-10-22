@@ -401,7 +401,7 @@ public extension NSView {
     func switchView(action: Selector, state: Bool) -> NSSwitch {
         let s = NSSwitch()
         s.heightAnchor.constraint(equalToConstant: 25).isActive = true
-        s.controlSize = .mini
+        s.controlSize = .small
         s.state = state ? .on : .off
         s.action = action
         s.target = self
@@ -669,6 +669,16 @@ public extension NSColor {
 
 public class FlippedStackView: NSStackView {
     public override var isFlipped: Bool { return true }
+
+    public override func addArrangedSubview(_ view: NSView) {
+        super.addArrangedSubview(view)
+        fillSettingsWidth(view, in: self)
+    }
+
+    public override func insertArrangedSubview(_ view: NSView, at index: Int) {
+        super.insertArrangedSubview(view, at: index)
+        fillSettingsWidth(view, in: self)
+    }
 }
 
 open class ScrollableStackView: NSView {
@@ -687,6 +697,7 @@ open class ScrollableStackView: NSView {
         self.clipView.drawsBackground = false
         
         self.stackView.orientation = orientation
+        if orientation == .vertical { self.stackView.alignment = .leading }
         self.stackView.setHuggingPriority(.defaultHigh, for: orientation == .vertical ? .horizontal : .vertical)
         self.stackView.translatesAutoresizingMaskIntoConstraints = false
         

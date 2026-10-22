@@ -356,6 +356,7 @@ private class SidebarView: NSStackView {
         spacer.heightAnchor.constraint(equalToConstant: 10).isActive = true
         
         self.scrollView.stackView.addArrangedSubview(MenuItem(icon: self.dashboardIcon, title: "Dashboard"))
+        self.scrollView.stackView.addArrangedSubview(MenuItem(icon: self.settingsIcon, title: "Settings"))
         self.scrollView.stackView.addArrangedSubview(spacer)
         
         self.supportPopover.behavior = .transient
@@ -371,7 +372,6 @@ private class SidebarView: NSStackView {
         let pauseButton = self.makeButton(title: localizedString("Pause the Stats"), image: self.pauseState ? self.resumeIcon : self.pauseIcon, action: #selector(togglePause))
         self.pauseButton = pauseButton
         
-        additionalButtons.addArrangedSubview(self.makeButton(title: localizedString("Settings"), image: self.settingsIcon, action: #selector(openSettings)))
         additionalButtons.addArrangedSubview(self.makeButton(title: localizedString("Support the application"), image: self.supportIcon, action: #selector(donate)))
         additionalButtons.addArrangedSubview(self.makeButton(title: localizedString("Report a bug"), image: self.bugIcon, action: #selector(reportBug)))
         additionalButtons.addArrangedSubview(pauseButton)
@@ -407,7 +407,7 @@ private class SidebarView: NSStackView {
         list.reversed().forEach { (m: Module) in
             if !m.available { return }
             let menu: NSView = MenuItem(icon: m.config.icon, title: m.config.name)
-            self.scrollView.stackView.insertArrangedSubview(menu, at: 2)
+            self.scrollView.stackView.insertArrangedSubview(menu, at: 3)
         }
     }
     
@@ -469,10 +469,6 @@ private class SidebarView: NSStackView {
         
         vc.view = view
         return vc
-    }
-    
-    @objc private func openSettings() {
-        NotificationCenter.default.post(name: .openModuleSettings, object: nil, userInfo: ["module": "Settings"])
     }
     
     @objc private func reportBug() {

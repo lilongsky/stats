@@ -4,6 +4,12 @@ public extension WidgetWrapper {
     var dimensionKey: String { "\(self.title)_\(self.type.rawValue)_customDimension" }
     var spacingKey: String { "\(self.title)_\(self.type.rawValue)_customSpacing" }
 
+    private var settingsDefaultDimension: Int {
+        if let line = self as? LineChart { return Int(line.automaticGraphWidth) }
+        if let network = self as? NetworkChart { return Int(network.automaticGraphWidth) }
+        return self.type == .pieChart ? (self.compact ? 18 : Int(self.frame.height)) : (self.compact ? 7 : 11)
+    }
+
     func configuredDimension(_ fallback: CGFloat) -> CGFloat {
         let configured = Store.shared.int(key: self.dimensionKey, defaultValue: 0)
         guard configured > 0 else { return fallback }
@@ -16,14 +22,10 @@ public extension WidgetWrapper {
     func dimensionSettings() -> NSView {
         var rows: [NSView] = [self.compactSizeRow()]
         var dimensionInput: StepperInput?
-        var defaultDimension: Int = 0
         let isDiameter = self.type == .pieChart
         let supportsWidth = [.lineChart, .barChart, .networkChart].contains(self.type)
         if isDiameter || supportsWidth {
-            let fallback: Int
-            if let line = self as? LineChart { fallback = Int(line.automaticGraphWidth) }
-            else if let network = self as? NetworkChart { fallback = Int(network.automaticGraphWidth) }
-            else { fallback = isDiameter ? (self.compact ? 18 : Int(self.frame.height)) : (self.compact ? 7 : 11) }
+            let fallback = self.settingsDefaultDimension
             let input = StepperInput(Store.shared.int(key: self.dimensionKey, defaultValue: fallback),
                                      range: NSRange(location: isDiameter ? 10 : 6,
                                                     length: isDiameter ? max(0, Int(self.frame.height) - 10) : 154),
@@ -33,8 +35,8 @@ public extension WidgetWrapper {
                 self.compactChanged()
             }
             dimensionInput = input
-            defaultDimension = fallback
-            rows.append(PreferencesRow(isDiameter ? "饼图直径" : "图形宽度", component: input))
+            input.identifier = NSUserInterfaceItemIdentifier("widget-dimension-input")
+            rows.append(PreferencesRow(localizedString(isDiameter ? "Pie Diameter" : "Graph Width"), component: input))
         }
         let spacingInput = StepperInput(
             Store.shared.int(key: self.spacingKey, defaultValue: self.compact ? 2 : 14),
@@ -44,20 +46,23 @@ public extension WidgetWrapper {
             Store.shared.set(key: self.spacingKey, value: value)
             self.compactChanged()
         }
-        rows.append(PreferencesRow("图标间距", component: spacingInput))
-        rows.append(PreferencesRow("自动尺寸", component: LocalActionButton("恢复默认") { [weak self] in
+        spacingInput.identifier = NSUserInterfaceItemIdentifier("widget-spacing-input")
+        self.updateSizingSettings = { [weak self, weak dimensionInput, weak spacingInput] in
+            guard let self else { return }
+            dimensionInput?.updateValue(Int(self.configuredDimension(CGFloat(self.settingsDefaultDimension))))
+            spacingInput?.updateValue(Store.shared.int(key: self.spacingKey, defaultValue: self.compact ? 2 : 14))
+        }
+        rows.append(PreferencesRow(localizedString("Item Spacing"), component: spacingInput))
+        let reset = LocalActionButton(localizedString("Restore Size and Spacing")) { [weak self] in
             guard let self else { return }
             Store.shared.remove(self.dimensionKey)
             Store.shared.remove(self.spacingKey)
             self.compactChanged()
-            let restored: Int
-            if let line = self as? LineChart { restored = Int(line.automaticGraphWidth) }
-            else if let network = self as? NetworkChart { restored = Int(network.automaticGraphWidth) }
-            else if self.type == .pieChart { restored = self.compact ? 18 : Int(self.frame.height) }
-            else { restored = defaultDimension }
-            dimensionInput?.updateValue(restored)
-            spacingInput.updateValue(self.compact ? 2 : 14)
-        }))
-        return PreferencesSection(title: "尺寸与间距", subtitle: "仅调整这个小组件，菜单栏会即时更新。", rows)
+            self.updateSizingSettings?()
+        }
+        reset.identifier = NSUserInterfaceItemIdentifier("widget-size-reset")
+        rows.append(PreferencesRow(localizedString("Size preset"), component: reset))
+        return PreferencesSection(title: localizedString("Size and Spacing"),
+            subtitle: localizedString("Changes apply to this widget and appear immediately in the menu bar."), rows)
     }
 }

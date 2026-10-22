@@ -33,10 +33,11 @@ open class NotificationsWrapper: NSStackView {
     
 
     public func durationSettings() -> NSView {
-        return PreferencesSection(title: "提醒规则", subtitle: "阈值连续满足指定时长后提醒，适用于本页的阈值规则。", [
-            PreferencesRow("持续时间", component: StepperInput(
+        return PreferencesSection(title: localizedString("Alert Rules"),
+            subtitle: localizedString("Thresholds must remain exceeded for this duration before an alert is sent."), [
+            PreferencesRow(localizedString("Duration"), component: StepperInput(
                 Store.shared.int(key: "\(self.module)_notifications_durationSeconds", defaultValue: 2),
-                range: NSRange(location: 0, length: 3600), unit: "秒"
+                range: NSRange(location: 0, length: 3600), unit: localizedString("sec")
             ) { [weak self] seconds in
                 guard let self else { return }
                 Store.shared.set(key: "\(self.module)_notifications_durationSeconds", value: seconds)

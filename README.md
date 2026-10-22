@@ -6,6 +6,8 @@ Independent fork of [exelban/stats](https://github.com/exelban/stats), based on 
 
 In the Clock calendar, click the year or month in the header to choose it from a native macOS pop-up menu. Selecting a year keeps the month, and selecting a month keeps the year. The year list offers 50 years on either side of the displayed year and recenters whenever it opens; scrolling, arrows and Today keep both selectors in sync.
 
+Settings now has a labeled sidebar entry and aligned groups for general options, the menu bar, advanced options and settings data. Each module's popup tools have four independent slots with application names and icons in native macOS menus. Per-widget size and spacing controls stay in sync with compact-mode defaults while preserving custom values; restore buttons apply only to the widget or tools being edited. See [FORK.md](FORK.md#settings-interface) for the validation scope.
+
 ## Deployment
 
 Build locally using the steps below. This fork currently has no custom GitHub release binary. The locally validated ZIP is an ad-hoc signed development package, not a notarized public release; validation on one Mac does not establish that another Mac will allow it.

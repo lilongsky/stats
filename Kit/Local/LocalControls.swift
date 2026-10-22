@@ -11,6 +11,8 @@ public final class LocalActionButton: NSButton {
         super.init(frame: .zero)
         self.title = title
         self.bezelStyle = .rounded
+        self.controlSize = .small
+        self.font = .systemFont(ofSize: 12)
         self.target = self
         self.action = #selector(invoke)
         if let symbol {
@@ -27,6 +29,9 @@ public final class LocalChoice: NSPopUpButton {
     public init(_ titles: [String], selected: Int, action: @escaping (Int) -> Void) {
         self.handler = action
         super.init(frame: .zero, pullsDown: false)
+        self.controlSize = .small
+        self.font = .systemFont(ofSize: 13)
+        self.cell?.lineBreakMode = .byTruncatingTail
         self.addItems(withTitles: titles)
         self.selectItem(at: min(max(0, selected), max(0, titles.count - 1)))
         self.target = self
@@ -41,6 +46,8 @@ public final class LocalToggle: NSSwitch {
     public init(_ enabled: Bool, action: @escaping (Bool) -> Void) {
         self.handler = action
         super.init(frame: .zero)
+        self.controlSize = .small
+        self.heightAnchor.constraint(equalToConstant: 25).isActive = true
         self.state = enabled ? .on : .off
         self.target = self
         self.action = #selector(invoke)

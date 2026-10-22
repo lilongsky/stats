@@ -3,17 +3,17 @@ import UniformTypeIdentifiers
 
 public enum FooterTools {
     public static let catalog: [(id: String, title: String, bundle: String?, path: String?)] = [
-        ("none", "隐藏", nil, nil),
-        ("activity", "活动监视器", "com.apple.ActivityMonitor", "/System/Applications/Utilities/Activity Monitor.app"),
-        ("console", "控制台", "com.apple.Console", "/System/Applications/Utilities/Console.app"),
-        ("terminal", "终端", "com.apple.Terminal", "/System/Applications/Utilities/Terminal.app"),
-        ("system", "系统信息", "com.apple.SystemProfiler", "/System/Applications/Utilities/System Information.app"),
-        ("disk", "磁盘工具", "com.apple.DiskUtility", "/System/Applications/Utilities/Disk Utility.app"),
-        ("network", "网络设置", nil, "x-apple.systempreferences:com.apple.Network-Settings.extension"),
-        ("battery", "电池设置", nil, "x-apple.systempreferences:com.apple.Battery-Settings.extension"),
-        ("bluetooth", "蓝牙设置", nil, "x-apple.systempreferences:com.apple.BluetoothSettings"),
-        ("datetime", "日期与时间设置", nil, "x-apple.systempreferences:com.apple.Date-Time-Settings.extension"),
-        ("calendar", "日历", "com.apple.iCal", "/System/Applications/Calendar.app")
+        ("none", "Hidden", nil, nil),
+        ("activity", "Activity Monitor", "com.apple.ActivityMonitor", "/System/Applications/Utilities/Activity Monitor.app"),
+        ("console", "Console", "com.apple.Console", "/System/Applications/Utilities/Console.app"),
+        ("terminal", "Terminal", "com.apple.Terminal", "/System/Applications/Utilities/Terminal.app"),
+        ("system", "System Information", "com.apple.SystemProfiler", "/System/Applications/Utilities/System Information.app"),
+        ("disk", "Disk Utility", "com.apple.DiskUtility", "/System/Applications/Utilities/Disk Utility.app"),
+        ("network", "Network Settings", nil, "x-apple.systempreferences:com.apple.Network-Settings.extension"),
+        ("battery", "Battery Settings", nil, "x-apple.systempreferences:com.apple.Battery-Settings.extension"),
+        ("bluetooth", "Bluetooth Settings", nil, "x-apple.systempreferences:com.apple.BluetoothSettings"),
+        ("datetime", "Date & Time Settings", nil, "x-apple.systempreferences:com.apple.Date-Time-Settings.extension"),
+        ("calendar", "Calendar", "com.apple.iCal", "/System/Applications/Calendar.app")
     ]
     public static let historyModules = ["CPU", "GPU", "RAM", "Disk", "Network", "Sensors", "Battery"]
     public static func defaults(_ module: String) -> [String] {
@@ -40,7 +40,7 @@ public enum FooterTools {
         return FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
     }
     public static func title(_ id: String) -> String {
-        self.catalog.first(where: { $0.id == id })?.title ??
+        self.catalog.first(where: { $0.id == id }).map { localizedString($0.title) } ??
             FileManager.default.displayName(atPath: id).replacingOccurrences(of: ".app", with: "")
     }
     public static func icon(_ id: String) -> NSImage {
@@ -64,8 +64,9 @@ internal final class FooterToolsEditor: NSStackView {
         self.module = module
         super.init(frame: .zero)
         self.orientation = .vertical
-        self.spacing = 8
-        self.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        self.alignment = .leading
+        self.spacing = 0
+        self.identifier = NSUserInterfaceItemIdentifier("popup-tools-editor")
         self.reload()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -75,7 +76,7 @@ internal final class FooterToolsEditor: NSStackView {
         for slot in 0..<4 {
             var options = FooterTools.catalog.map { $0.id }
             if saved[slot].hasPrefix("/") { options.append(saved[slot]) }
-            let titles = options.map(FooterTools.title) + ["选择应用…"]
+            let titles = options.map(FooterTools.title) + [localizedString("Choose Application…")]
             let selected = options.firstIndex(of: saved[slot]) ?? 0
             let choice = LocalChoice(titles, selected: selected) { [weak self] index in
                 guard let self else { return }
@@ -88,7 +89,7 @@ internal final class FooterToolsEditor: NSStackView {
                     panel.canChooseDirectories = false
                     panel.allowsMultipleSelection = false
                     panel.directoryURL = URL(fileURLWithPath: "/Applications")
-                    panel.prompt = "选择应用"
+                    panel.prompt = localizedString("Choose Application")
                     if panel.runModal() == .OK { selectedID = panel.url?.path }
                 }
                 if let selectedID {
@@ -99,14 +100,30 @@ internal final class FooterToolsEditor: NSStackView {
                 }
                 self.reload()
             }
-            self.addArrangedSubview(PreferencesRow("按钮 \(slot+1)", component: choice))
+            choice.identifier = NSUserInterfaceItemIdentifier("popup-tool-choice-\(slot)")
+            for (index, id) in options.enumerated() where id != "none" {
+                let icon = FooterTools.icon(id).copy() as! NSImage
+                icon.size = NSSize(width: 16, height: 16)
+                choice.item(at: index)?.image = icon
+            }
+            let row = PreferencesRow(String(format: localizedString("Shortcut %d"), slot + 1), component: choice)
+            self.addArrangedSubview(row)
+            fillSettingsWidth(row, in: self)
+            let separator = NSBox()
+            separator.boxType = .separator
+            self.addArrangedSubview(separator)
+            fillSettingsWidth(separator, in: self)
         }
-        self.addArrangedSubview(LocalActionButton("恢复此指标的默认工具") { [weak self] in
+        let reset = LocalActionButton(localizedString("Restore Default Tools")) { [weak self] in
             guard let self else { return }
             Store.shared.remove("\(self.module)_popup_tools")
             self.reload()
             NotificationCenter.default.post(name: .localPopupOptionsChanged, object: self.module)
-        })
+        }
+        reset.identifier = NSUserInterfaceItemIdentifier("popup-tools-reset")
+        let resetRow = PreferencesRow(localizedString("Tool preset"), component: reset)
+        self.addArrangedSubview(resetRow)
+        fillSettingsWidth(resetRow, in: self)
     }
 }
 
@@ -160,22 +177,30 @@ public extension PopupWrapper {
     }
     func customizationSettings() -> NSView {
         let view = SettingsContainerView()
+        view.identifier = NSUserInterfaceItemIdentifier("popup-customization")
         let preview = NSStackView()
         preview.orientation = .horizontal
-        preview.spacing = 12
-        preview.addArrangedSubview(LocalActionButton("预览弹窗") { [weak self] in self?.previewAction?() })
+        preview.spacing = 8
+        let previewButton = LocalActionButton(localizedString("Preview Popup"), symbol: "macwindow") { [weak self] in self?.previewAction?() }
+        previewButton.identifier = NSUserInterfaceItemIdentifier("popup-preview")
+        preview.addArrangedSubview(previewButton)
         if FooterTools.historyModules.contains(self.title) {
-            preview.addArrangedSubview(LocalActionButton("历史回看", symbol: "clock.arrow.circlepath") { [weak self] in
+            let historyButton = LocalActionButton(localizedString("View History"), symbol: "clock.arrow.circlepath") { [weak self] in
                 if let self { HistoryWindow.show(module: self.title) }
-            })
+            }
+            historyButton.identifier = NSUserInterfaceItemIdentifier("popup-history")
+            preview.addArrangedSubview(historyButton)
         }
+        preview.addArrangedSubview(NSView())
         view.addArrangedSubview(preview)
         if !self.popupSectionOrder.isEmpty {
-            view.addArrangedSubview(PreferencesSection(title: "弹窗分区", subtitle: "拖动行调整顺序，开关控制是否显示。", [
+            view.addArrangedSubview(PreferencesSection(title: localizedString("Popup Sections"),
+                subtitle: localizedString("Drag sections to reorder them. Use the switches to choose what appears."), id: "popup-settings-sections", [
                 PopupSectionsEditor(popup: self)
             ]))
         }
-        view.addArrangedSubview(PreferencesSection(title: "底部快捷工具", [
+        view.addArrangedSubview(PreferencesSection(title: localizedString("Shortcut Tools"),
+            subtitle: localizedString("Choose the applications shown at the bottom of this popup."), id: "popup-settings-tools", [
             FooterToolsEditor(module: self.title)
         ]))
         return view
@@ -191,9 +216,11 @@ private final class PopupSectionsEditor: NSView, NSTableViewDataSource, NSTableV
         self.popup = popup
         self.ids = popup.orderedSectionIDs()
         super.init(frame: .zero)
+        self.identifier = NSUserInterfaceItemIdentifier("popup-section-editor")
         let scroll = NSScrollView()
         scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.hasVerticalScroller = true
+        scroll.hasVerticalScroller = self.ids.count > 8
+        scroll.borderType = .noBorder
         scroll.drawsBackground = false
         self.addSubview(scroll)
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("section"))
@@ -201,7 +228,13 @@ private final class PopupSectionsEditor: NSView, NSTableViewDataSource, NSTableV
         self.table.addTableColumn(column)
         self.table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         self.table.headerView = nil
-        self.table.rowHeight = 30
+        // The surrounding card supplies insets; automatic style adds vertical
+        // table padding that would clip the last row in this fixed-height list.
+        self.table.style = .plain
+        self.table.rowHeight = 36
+        self.table.intercellSpacing = .zero
+        self.table.autoresizingMask = [.width]
+        self.table.identifier = NSUserInterfaceItemIdentifier("popup-sections-table")
         self.table.backgroundColor = .clear
         self.table.dataSource = self
         self.table.delegate = self
@@ -209,12 +242,11 @@ private final class PopupSectionsEditor: NSView, NSTableViewDataSource, NSTableV
         self.table.setDraggingSourceOperationMask(.move, forLocal: true)
         scroll.documentView = self.table
         NSLayoutConstraint.activate([
-            self.widthAnchor.constraint(equalToConstant: 400),
             scroll.leadingAnchor.constraint(equalTo: self.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: self.trailingAnchor),
             scroll.topAnchor.constraint(equalTo: self.topAnchor),
             scroll.bottomAnchor.constraint(equalTo: self.bottomAnchor),
-            self.heightAnchor.constraint(equalToConstant: CGFloat(min(8, max(1, self.ids.count))) * 32)
+            self.heightAnchor.constraint(equalToConstant: CGFloat(min(8, max(1, self.ids.count))) * 36)
         ])
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -226,24 +258,42 @@ private final class PopupSectionsEditor: NSView, NSTableViewDataSource, NSTableV
         let line = NSStackView()
         line.orientation = .horizontal
         line.spacing = 8
-        line.addArrangedSubview(LocalToggle(!hidden.contains(id)) { [weak self] visible in
+        line.edgeInsets = .init(top: 4, left: 2, bottom: 4, right: 2)
+        let handle = NSImageView(image: NSImage(systemSymbolName: "line.3.horizontal", accessibilityDescription: nil) ?? NSImage())
+        handle.contentTintColor = .tertiaryLabelColor
+        handle.widthAnchor.constraint(equalToConstant: 14).isActive = true
+        line.addArrangedSubview(handle)
+        let title = NSTextField(labelWithString: localizedString(popup.popupSectionTitles[id] ?? id))
+        title.font = .systemFont(ofSize: 13)
+        title.lineBreakMode = .byTruncatingTail
+        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        line.addArrangedSubview(title)
+        line.addArrangedSubview(NSView())
+        let toggle = LocalToggle(!hidden.contains(id)) { [weak self] visible in
             guard let self, let popup = self.popup else { return }
             var hidden = Store.shared.array(key: "\(popup.title)_popup_hiddenSections", defaultValue: []) as? [String] ?? []
             hidden.removeAll { $0 == id }
             if !visible { hidden.append(id) }
             Store.shared.set(key: "\(popup.title)_popup_hiddenSections", value: hidden)
             self.changed()
-        })
-        line.addArrangedSubview(NSTextField(labelWithString: popup.popupSectionTitles[id] ?? id))
-        line.addArrangedSubview(NSView())
+        }
+        toggle.identifier = NSUserInterfaceItemIdentifier("popup-section-toggle-\(id)")
+        toggle.setAccessibilityLabel(title.stringValue)
         let up = LocalActionButton("", symbol: "chevron.up") { [weak self] in self?.move(row, to: row - 1) }
         let down = LocalActionButton("", symbol: "chevron.down") { [weak self] in self?.move(row, to: row + 1) }
-        up.setAccessibilityLabel("上移分区")
-        down.setAccessibilityLabel("下移分区")
+        up.identifier = NSUserInterfaceItemIdentifier("popup-section-up-\(id)")
+        down.identifier = NSUserInterfaceItemIdentifier("popup-section-down-\(id)")
+        up.setAccessibilityLabel(localizedString("Move Section Up"))
+        down.setAccessibilityLabel(localizedString("Move Section Down"))
+        for button in [up, down] {
+            button.isBordered = false
+            button.widthAnchor.constraint(equalToConstant: 24).isActive = true
+        }
         up.isEnabled = row > 0
         down.isEnabled = row + 1 < self.ids.count
         line.addArrangedSubview(up)
         line.addArrangedSubview(down)
+        line.addArrangedSubview(toggle)
         return line
     }
     private func move(_ from: Int, to: Int) {

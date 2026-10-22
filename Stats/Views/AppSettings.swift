@@ -100,7 +100,9 @@ class ApplicationSettings: NSStackView {
         )
         scrollView.stackView.spacing = Constants.Settings.margin
         
-        scrollView.stackView.addArrangedSubview(self.informationView())
+        let informationView = self.informationView()
+        scrollView.stackView.addArrangedSubview(informationView)
+        informationView.widthAnchor.constraint(equalTo: scrollView.stackView.widthAnchor, constant: -Constants.Settings.margin * 2).isActive = true
         
         self.updateSelector = selectView(
             action: #selector(self.toggleUpdateInterval),
@@ -112,37 +114,48 @@ class ApplicationSettings: NSStackView {
             state: LaunchAtLogin.isEnabled
         )
         
-        scrollView.stackView.addArrangedSubview(PreferencesSection([
-            PreferencesRow(localizedString("Check for updates"), component: self.updateSelector!),
+        scrollView.stackView.addArrangedSubview(PreferencesSection(title: localizedString("General"), [
+            PreferencesRow(localizedString("Start at login"), component: self.startAtLoginBtn!),
+            PreferencesRow(localizedString("Show icon in dock"), component: switchView(
+                action: #selector(self.toggleDock),
+                state: Store.shared.bool(key: "dockIcon", defaultValue: false)
+            )),
             PreferencesRow(localizedString("Temperature"), component: selectView(
                 action: #selector(self.toggleTemperatureUnits),
                 items: TemperatureUnits,
                 selected: self.temperatureUnitsValue
             )),
-            PreferencesRow(localizedString("Show icon in dock"), component: switchView(
-                action: #selector(self.toggleDock),
-                state: Store.shared.bool(key: "dockIcon", defaultValue: false)
-            )),
-            PreferencesRow(localizedString("Start at login"), component: self.startAtLoginBtn!),
-            PreferencesRow(localizedString("Keep the menubar items position"), component: switchView(
-                action: #selector(self.toggleMenuBarPosition),
-                state: self.keepMenuBarPosition
-            )),
-            PreferencesRow(localizedString("Compact menu bar"), component: switchView(
-                action: #selector(self.toggleCompactMenuBar),
-                state: self.compactMenuBar
-            )),
-            PreferencesRow("macOS widgets", component: switchView(
+            PreferencesRow(localizedString("Check for updates"), component: self.updateSelector!),
+            PreferencesRow(localizedString("macOS widgets"), component: switchView(
                 action: #selector(self.toggleSystemWidgetsUpdatesState),
                 state: self.systemWidgetsUpdatesState
             ))
         ]))
-        
-        self.combinedModulesView = PreferencesSection([
-            PreferencesRow(localizedString("Combined modules"), component: switchView(
-                action: #selector(self.toggleCombinedModules),
-                state: self.combinedModulesState
+
+        scrollView.stackView.addArrangedSubview(PreferencesSection(title: localizedString("Menu bar"), [
+            PreferencesRow(localizedString("Keep the menubar items position"), component: switchView(
+                action: #selector(self.toggleMenuBarPosition),
+                state: self.keepMenuBarPosition
             )),
+            PreferencesRow(
+                localizedString("Compact menu bar"),
+                localizedString("Each widget can override this default in its own settings."),
+                component: switchView(
+                    action: #selector(self.toggleCompactMenuBar),
+                    state: self.compactMenuBar
+                )
+            )
+        ]))
+        
+        self.combinedModulesView = PreferencesSection(title: localizedString("Advanced menu bar"), [
+            PreferencesRow(
+                localizedString("Combined modules"),
+                localizedString("Combine modules into one item. Keep this off to move each item separately."),
+                component: switchView(
+                    action: #selector(self.toggleCombinedModules),
+                    state: self.combinedModulesState
+                )
+            ),
             PreferencesRow(localizedString("Show icon instead of widgets"), component: switchView(
                 action: #selector(self.toggleCombinedModulesIcon),
                 state: self.combinedModulesIcon
@@ -196,7 +209,7 @@ class ApplicationSettings: NSStackView {
         self.remoteView?.setRowVisibility(6, newState: false)
         self.remoteView?.setRowVisibility(7, newState: false)
         
-        scrollView.stackView.addArrangedSubview(PreferencesSection(title: localizedString("Settings"), [
+        scrollView.stackView.addArrangedSubview(PreferencesSection(title: localizedString("Settings Data"), [
             PreferencesRow(
                 localizedString("Export settings"),
                 component: buttonView(#selector(self.exportSettings), text: localizedString("Save"))
@@ -211,7 +224,7 @@ class ApplicationSettings: NSStackView {
             )
         ]))
         
-        self.fanHelperView = PreferencesSection([
+        self.fanHelperView = PreferencesSection(title: localizedString("Maintenance"), [
             PreferencesRow(
                 localizedString("Uninstall fan helper"),
                 component: buttonView(#selector(self.uninstallHelper), text: localizedString("Uninstall"))
@@ -282,52 +295,55 @@ class ApplicationSettings: NSStackView {
     
     private func informationView() -> NSView {
         let view = NSStackView()
-        view.heightAnchor.constraint(equalToConstant: 220).isActive = true
-        view.orientation = .vertical
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.heightAnchor.constraint(equalToConstant: 72).isActive = true
+        view.orientation = .horizontal
         view.distribution = .fill
         view.alignment = .centerY
-        view.spacing = 0
-        
-        let container: NSGridView = NSGridView()
-        container.heightAnchor.constraint(equalToConstant: 180).isActive = true
-        container.rowSpacing = 0
-        container.yPlacement = .center
-        container.xPlacement = .center
+        view.spacing = 12
+        view.edgeInsets = NSEdgeInsets(top: 12, left: 0, bottom: 12, right: 0)
         
         let iconView: NSImageView = NSImageView(image: NSImage(named: NSImage.Name("AppIcon"))!)
-        
-        let statsName: NSTextField = TextView(frame: NSRect(x: 0, y: 0, width: view.frame.width, height: 22))
-        statsName.alignment = .center
-        statsName.font = NSFont.systemFont(ofSize: 20, weight: .regular)
-        statsName.stringValue = "Stats"
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+        iconView.widthAnchor.constraint(equalToConstant: 48).isActive = true
+        iconView.heightAnchor.constraint(equalToConstant: 48).isActive = true
+
+        let identity = NSStackView()
+        identity.orientation = .vertical
+        identity.alignment = .leading
+        identity.spacing = 3
+
+        let displayName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
+            ?? "Stats"
+        let statsName = NSTextField(labelWithString: displayName)
+        statsName.font = NSFont.systemFont(ofSize: 17, weight: .semibold)
         statsName.isSelectable = true
         
         let versionNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as! String
         let buildNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as! String
         
-        let statsVersion: NSTextField = TextView(frame: NSRect(x: 0, y: 0, width: view.frame.width, height: 16))
-        statsVersion.alignment = .center
+        let statsVersion = NSTextField(labelWithString: "\(localizedString("Version")) \(versionNumber)")
         statsVersion.font = NSFont.systemFont(ofSize: 12, weight: .regular)
-        statsVersion.stringValue = "\(localizedString("Version")) \(versionNumber)"
+        statsVersion.textColor = .secondaryLabelColor
         statsVersion.isSelectable = true
         statsVersion.toolTip = "\(localizedString("Build number")) \(buildNumber)"
+
+        identity.addArrangedSubview(statsName)
+        identity.addArrangedSubview(statsVersion)
         
         let updateButton: NSButton = NSButton()
         updateButton.title = localizedString("Check for update")
         updateButton.bezelStyle = .rounded
+        updateButton.controlSize = .small
         updateButton.target = self
         updateButton.action = #selector(self.updateAction)
+        updateButton.setContentHuggingPriority(.required, for: .horizontal)
         
-        container.addRow(with: [iconView])
-        container.addRow(with: [statsName])
-        container.addRow(with: [statsVersion])
-        container.addRow(with: [updateButton])
-        
-        container.row(at: 1).height = 22
-        container.row(at: 2).height = 20
-        container.row(at: 3).height = 30
-        
-        view.addArrangedSubview(container)
+        view.addArrangedSubview(iconView)
+        view.addArrangedSubview(identity)
+        view.addArrangedSubview(NSView())
+        view.addArrangedSubview(updateButton)
         
         return view
     }

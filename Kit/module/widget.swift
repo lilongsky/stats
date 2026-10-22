@@ -168,6 +168,8 @@ open class WidgetWrapper: NSView, widget_p {
     public var onClick: (() -> Void)? = nil
     public var shadowSize: CGSize
     internal var queue: DispatchQueue
+    internal var updateSizingSettings: (() -> Void)?
+    private weak var compactSizeControl: NSSwitch?
     public var compact: Bool {
         Store.shared.bool(key: "\(self.title)_\(self.type.rawValue)_compact", defaultValue: Constants.Widget.compact)
     }
@@ -185,17 +187,25 @@ open class WidgetWrapper: NSView, widget_p {
     deinit { NotificationCenter.default.removeObserver(self) }
 
     internal func compactSizeRow() -> PreferencesRow {
-        PreferencesRow(localizedString("Compact widget size"), component: switchView(
+        let control = switchView(
             action: #selector(toggleCompactSize), state: self.compact
-        ))
+        )
+        control.identifier = NSUserInterfaceItemIdentifier("widget-compact-toggle")
+        self.compactSizeControl = control
+        return PreferencesRow(localizedString("Compact widget size"), component: control)
     }
 
     @objc private func toggleCompactSize(_ sender: NSControl) {
         Store.shared.set(key: "\(self.title)_\(self.type.rawValue)_compact", value: controlState(sender))
         self.compactChanged()
+        self.updateSizingSettings?()
     }
 
-    @objc private func defaultCompactChanged() { self.compactChanged() }
+    @objc private func defaultCompactChanged() {
+        self.compactChanged()
+        self.compactSizeControl?.state = self.compact ? .on : .off
+        self.updateSizingSettings?()
+    }
     open func compactChanged() {
         self.widthHandler?()
         self.redraw()

@@ -1105,12 +1105,34 @@ public class SettingsContainerView: NSStackView {
         super.init(frame: NSRect.zero)
         self.translatesAutoresizingMaskIntoConstraints = false
         self.orientation = .vertical
-        self.spacing = Constants.Settings.margin
+        self.alignment = .leading
+        self.spacing = 16
+        self.setHuggingPriority(.defaultLow, for: .horizontal)
+    }
+
+    public override func addArrangedSubview(_ view: NSView) {
+        super.addArrangedSubview(view)
+        fillSettingsWidth(view, in: self)
     }
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+}
+
+// Settings forms follow their scroll viewport, while explicitly sized content
+// can retain a stronger constraint (for example a monitoring preview).
+internal func fillSettingsWidth(_ view: NSView, in stack: NSStackView) {
+    guard stack.orientation == .vertical else { return }
+    guard !stack.constraints.contains(where: {
+        $0.identifier == "settings-form-width" && ($0.firstItem as? NSView) === view
+    }) else { return }
+    view.translatesAutoresizingMaskIntoConstraints = false
+    let width = view.widthAnchor.constraint(equalTo: stack.widthAnchor,
+        constant: -(stack.edgeInsets.left + stack.edgeInsets.right))
+    width.priority = .init(999)
+    width.identifier = "settings-form-width"
+    width.isActive = true
 }
 
 public enum SMCHelperInstallState {
@@ -1690,8 +1712,9 @@ public class PreferencesSection: NSStackView {
         super.init(frame: .zero)
         
         self.orientation = .vertical
-        self.setHuggingPriority(.required, for: .horizontal)
-        self.spacing = 0
+        self.alignment = .leading
+        self.setHuggingPriority(.defaultLow, for: .horizontal)
+        self.spacing = 6
         if let id {
             self.identifier = NSUserInterfaceItemIdentifier(id)
         }
@@ -1701,18 +1724,18 @@ public class PreferencesSection: NSStackView {
         }
         
         self.container.orientation = .vertical
-        self.container.setHuggingPriority(.required, for: .horizontal)
+        self.container.alignment = .leading
+        self.container.setHuggingPriority(.defaultLow, for: .horizontal)
         self.container.wantsLayer = true
-        self.container.layer?.backgroundColor = NSColor.quaternaryLabelColor.withAlphaComponent(0.025).cgColor
-        self.container.layer?.cornerRadius = Constants.Settings.margin
+        self.container.layer?.cornerRadius = 10
+        self.container.layer?.borderWidth = 0.5
         self.container.edgeInsets = NSEdgeInsets(
-            top: Constants.Settings.margin/1.25,
-            left: Constants.Settings.margin,
-            bottom: Constants.Settings.margin/1.25,
-            right: Constants.Settings.margin
+            top: 4, left: 12, bottom: 4, right: 12
         )
-        self.container.spacing = Constants.Settings.margin/1.25
+        self.container.spacing = 0
         self.addArrangedSubview(self.container)
+        fillSettingsWidth(self.container, in: self)
+        self.updateLayer()
         
         for item in components {
             self.add(item)
@@ -1724,43 +1747,53 @@ public class PreferencesSection: NSStackView {
     }
     
     public override func updateLayer() {
-        self.container.layer?.backgroundColor = NSColor.quaternaryLabelColor.withAlphaComponent(0.025).cgColor
+        self.container.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        self.container.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.35).cgColor
+    }
+
+    public override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        self.effectiveAppearance.performAsCurrentDrawingAppearance { self.updateLayer() }
     }
     
     private func addHeader(title: String, subtitle: String) {
         let view = NSStackView()
-        view.heightAnchor.constraint(equalToConstant: 26).isActive = true
-        
-        let space = NSView()
-        space.widthAnchor.constraint(equalToConstant: 4).isActive = true
-        
-        let firstField: NSTextField = TextView()
-        firstField.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        firstField.stringValue = title
-        
-        let secondField: NSTextField = TextView()
-        secondField.font = NSFont.systemFont(ofSize: 11, weight: .regular)
-        secondField.textColor = .placeholderTextColor
-        secondField.stringValue = subtitle
+        view.orientation = .vertical
+        view.alignment = .leading
+        view.spacing = 3
+        view.edgeInsets = .init(top: 2, left: 4, bottom: 2, right: 4)
+
+        let firstField = NSTextField(wrappingLabelWithString: title)
+        firstField.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        firstField.isHidden = title.isEmpty
+
+        let secondField = NSTextField(wrappingLabelWithString: subtitle)
+        secondField.font = NSFont.systemFont(ofSize: 11)
+        secondField.textColor = .secondaryLabelColor
+        secondField.isHidden = subtitle.isEmpty
         self.subtitleField = secondField
-        
-        view.addArrangedSubview(space)
+
         view.addArrangedSubview(firstField)
-        view.addArrangedSubview(NSView())
         view.addArrangedSubview(secondField)
-        
+        fillSettingsWidth(firstField, in: view)
+        fillSettingsWidth(secondField, in: view)
         self.addArrangedSubview(view)
+        fillSettingsWidth(view, in: self)
     }
     
     public func setSubtitle(_ value: String) {
         self.subtitleField?.stringValue = value
+        self.subtitleField?.isHidden = value.isEmpty
     }
     
     public func add(_ view: NSView) {
         if !self.container.subviews.isEmpty {
-            self.container.addArrangedSubview(PreferencesSeparator())
+            let separator = PreferencesSeparator()
+            self.container.addArrangedSubview(separator)
+            fillSettingsWidth(separator, in: self.container)
         }
         self.container.addArrangedSubview(view)
+        fillSettingsWidth(view, in: self.container)
     }
     
     public func delete(_ id: String) {
@@ -1813,7 +1846,7 @@ private class PreferencesSeparator: NSView {
     public init() {
         super.init(frame: .zero)
         self.wantsLayer = true
-        self.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.05).cgColor
+        self.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.35).cgColor
         self.heightAnchor.constraint(equalToConstant: 1).isActive = true
         self.identifier = NSUserInterfaceItemIdentifier("PreferencesSeparator")
     }
@@ -1823,28 +1856,36 @@ private class PreferencesSeparator: NSView {
     }
     
     public override func updateLayer() {
-        self.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.05).cgColor
+        self.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.35).cgColor
     }
 }
 
 public class PreferencesRow: NSStackView {
     private var helpCallback: (() -> Void)?
+    private var componentView: NSView
+    private let fillsComponent: Bool
+    private var componentWidth: NSLayoutConstraint?
     
     public init(_ title: String? = nil, _ description: String? = nil, id: String? = nil, component: NSView, help: (() -> Void)? = nil) {
         self.helpCallback = help
+        self.componentView = component
+        self.fillsComponent = title == nil && description == nil && help == nil
         
         super.init(frame: .zero)
         
         self.orientation = .horizontal
         self.distribution = .fill
         self.alignment = .centerY
-        self.edgeInsets = NSEdgeInsets(top: Constants.Settings.margin/2, left: 0, bottom: (Constants.Settings.margin/2) - 1, right: 0)
-        self.spacing = 0
+        self.edgeInsets = NSEdgeInsets(top: 7, left: 0, bottom: 7, right: 0)
+        self.spacing = 12
+        self.heightAnchor.constraint(greaterThanOrEqualToConstant: 34).isActive = true
         if let id {
             self.identifier = NSUserInterfaceItemIdentifier(id)
         }
         
-        self.addArrangedSubview(self.text(title, description))
+        if !self.fillsComponent {
+            self.addArrangedSubview(self.text(title, description))
+        }
         if help != nil {
             let helpBtn = NSButton()
             helpBtn.bezelStyle = .helpButton
@@ -1852,13 +1893,11 @@ public class PreferencesRow: NSStackView {
             helpBtn.title = ""
             helpBtn.action = #selector(self.help)
             helpBtn.target = self
-            let space = NSView()
-            space.widthAnchor.constraint(equalToConstant: 5).isActive = true
-            self.addArrangedSubview(space)
             self.addArrangedSubview(helpBtn)
         }
-        self.addArrangedSubview(NSView())
         self.addArrangedSubview(component)
+        self.configureComponent(component)
+        if let title, let control = component as? NSControl { control.setAccessibilityLabel(title) }
     }
     
     required init?(coder: NSCoder) {
@@ -1866,30 +1905,51 @@ public class PreferencesRow: NSStackView {
     }
     
     public func replaceComponent(with view: NSView) {
-        self.subviews.removeLast()
+        self.componentWidth?.isActive = false
+        self.componentView.removeFromSuperview()
+        self.componentView = view
         self.addArrangedSubview(view)
+        self.configureComponent(view)
+    }
+
+    private func configureComponent(_ view: NSView) {
+        if self.fillsComponent {
+            self.componentWidth = view.widthAnchor.constraint(equalTo: self.widthAnchor)
+            self.componentWidth?.isActive = true
+        } else {
+            view.setContentHuggingPriority(.required, for: .horizontal)
+            view.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+            if let choice = view as? NSPopUpButton {
+                choice.controlSize = .small
+                choice.cell?.lineBreakMode = .byTruncatingTail
+                self.componentWidth = choice.widthAnchor.constraint(lessThanOrEqualTo: self.widthAnchor, multiplier: 0.58)
+                self.componentWidth?.priority = .defaultHigh
+                self.componentWidth?.isActive = true
+            }
+        }
     }
     
     fileprivate func text(_ title: String? = nil, _ description: String? = nil) -> NSView {
         let view: NSStackView = NSStackView()
         view.orientation = .vertical
-        view.spacing = 0
+        view.alignment = .leading
+        view.spacing = 3
+        view.setHuggingPriority(.defaultLow, for: .horizontal)
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         
         if let title {
-            let field: NSTextField = TextView()
-            field.font = NSFont.systemFont(ofSize: 12, weight: .regular)
-            field.stringValue = title
+            let field = NSTextField(wrappingLabelWithString: title)
+            field.font = NSFont.systemFont(ofSize: 13)
             view.addArrangedSubview(field)
+            fillSettingsWidth(field, in: view)
         }
         
         if let description {
-            let field: NSTextField = TextView()
-            field.font = NSFont.systemFont(ofSize: 12, weight: .regular)
+            let field = NSTextField(wrappingLabelWithString: description)
+            field.font = NSFont.systemFont(ofSize: 11)
             field.textColor = .secondaryLabelColor
-            field.stringValue = description
             view.addArrangedSubview(field)
-            view.addArrangedSubview(NSView())
-            view.alignment = .leading
+            fillSettingsWidth(field, in: view)
         }
         
         return view
