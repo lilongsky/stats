@@ -168,6 +168,9 @@ open class WidgetWrapper: NSView, widget_p {
     public var onClick: (() -> Void)? = nil
     public var shadowSize: CGSize
     internal var queue: DispatchQueue
+    public var compact: Bool {
+        Store.shared.bool(key: "\(self.title)_\(self.type.rawValue)_compact", defaultValue: Constants.Widget.compact)
+    }
     
     public init(_ type: widget_t, title: String, frame: NSRect) {
         self.type = type
@@ -176,6 +179,26 @@ open class WidgetWrapper: NSView, widget_p {
         self.queue = DispatchQueue(label: "eu.exelban.Stats.WidgetWrapper.\(type.rawValue).\(title)")
         
         super.init(frame: frame)
+        NotificationCenter.default.addObserver(self, selector: #selector(defaultCompactChanged), name: .toggleOneView, object: nil)
+    }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    internal func compactSizeRow() -> PreferencesRow {
+        PreferencesRow(localizedString("Compact widget size"), component: switchView(
+            action: #selector(toggleCompactSize), state: self.compact
+        ))
+    }
+
+    @objc private func toggleCompactSize(_ sender: NSControl) {
+        Store.shared.set(key: "\(self.title)_\(self.type.rawValue)_compact", value: controlState(sender))
+        self.compactChanged()
+    }
+
+    @objc private func defaultCompactChanged() { self.compactChanged() }
+    open func compactChanged() {
+        self.widthHandler?()
+        self.redraw()
     }
     
     required public init?(coder: NSCoder) {
@@ -279,6 +302,7 @@ public class SWidget {
     
     private var menuBarItem: NSStatusItem? = nil
     private var originX: CGFloat
+    private var originalContentPadding: Double? = nil
     
     public init(_ type: widget_t, defaultWidget: widget_t, module: String, item: widget_p, image: NSImage) {
         self.type = type
@@ -293,6 +317,7 @@ public class SWidget {
             if let s = self, let item = s.menuBarItem, let width: CGFloat = self?.item.frame.width, item.length != width {
                 item.length = width
             }
+            self?.updateStatusItemPadding()
         }
         self.item.identifier = NSUserInterfaceItemIdentifier(self.type.rawValue)
     }
@@ -338,8 +363,10 @@ public class SWidget {
                 guard self.menuBarItem == nil else { return }
                 restoreNSStatusItemPosition(id: "\(self.module)_\(self.type.rawValue)")
                 self.menuBarItem = NSStatusBar.system.statusItem(withLength: self.item.frame.width)
+                self.originalContentPadding = nil
                 DispatchQueue.main.async(execute: {
                     self.menuBarItem?.autosaveName = "\(self.module)_\(self.type.rawValue)"
+                    self.updateStatusItemPadding()
                 })
                 if self.item.frame.origin.x != self.originX {
                     self.item.setFrameOrigin(NSPoint(x: self.originX, y: self.item.frame.origin.y))
@@ -355,6 +382,7 @@ public class SWidget {
                 self.menuBarItem?.button?.target = self
                 self.menuBarItem?.button?.action = #selector(self.togglePopup)
                 self.menuBarItem?.button?.sendAction(on: [.leftMouseDown, .rightMouseDown])
+                self.updateStatusItemPadding()
             })
         } else {
             let preservePosition = self.keepMenuBarPosition || Store.shared.bool(key: "CombinedModules", defaultValue: false)
@@ -367,6 +395,30 @@ public class SWidget {
                 self.menuBarItem = nil
             })
         }
+    }
+
+    // AppKit's status-item window adds its own horizontal padding around the
+    // button. Changing the widget width alone leaves that space untouched.
+    // This is a private AppKit selector, guarded and tested on the local Mac.
+    // It applies only to this item's window, without changing global defaults.
+    private func updateStatusItemPadding() {
+        guard let window = self.menuBarItem?.button?.window else { return }
+        let getter = NSSelectorFromString("externalItemContentPadding")
+        let setter = NSSelectorFromString("setExternalItemContentPadding:")
+        guard window.responds(to: getter), window.responds(to: setter) else { return }
+        typealias ReadPadding = @convention(c) (AnyObject, Selector) -> Double
+        typealias WritePadding = @convention(c) (AnyObject, Selector, Double) -> Void
+        let read = unsafeBitCast(window.method(for: getter), to: ReadPadding.self)
+        let write = unsafeBitCast(window.method(for: setter), to: WritePadding.self)
+        if self.originalContentPadding == nil { self.originalContentPadding = read(window, getter) }
+        let original = self.originalContentPadding ?? read(window, getter)
+        let compact = (self.item as? WidgetWrapper)?.compact ?? Constants.Widget.compact
+        let defaultPadding = compact ? min(original, 4) : original
+        let widget = self.item as? WidgetWrapper
+        let spacingKey = widget?.spacingKey ?? ""
+        let padding = Store.shared.exist(key: spacingKey) ?
+            Double(min(20, max(0, Store.shared.int(key: spacingKey, defaultValue: 2)))) * 2 : defaultPadding
+        if read(window, getter) != padding { write(window, setter, padding) }
     }
     
     @objc private func togglePopup() {
@@ -515,7 +567,7 @@ public class MenuBar {
         
         let w = self.activeWidgets.isEmpty ? 0 : self.activeWidgets.map({ $0.item.frame.width }).reduce(0, +) +
             (CGFloat(self.activeWidgets.count - 1) * Constants.Widget.spacing) +
-            Constants.Widget.spacing * 2
+            Constants.Widget.padding * 2
         self.menuBarItem?.length = w
         self.view.setFrameOrigin(NSPoint(x: 0, y: 0))
         self.view.setFrameSize(NSSize(width: w, height: Constants.Widget.height))
@@ -590,7 +642,7 @@ public class MenuBarView: NSView {
     }
     
     public func recalculate(_ list: [widget_t] = []) {
-        var x: CGFloat = Constants.Widget.spacing
+        var x: CGFloat = Constants.Widget.padding
         list.forEach { (type: widget_t) in
             if let view = self.subviews.first(where: { $0.identifier == NSUserInterfaceItemIdentifier(type.rawValue) }) {
                 view.setFrameOrigin(NSPoint(x: x, y: view.frame.origin.y))

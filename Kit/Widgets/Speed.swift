@@ -331,6 +331,15 @@ public class SpeedWidget: WidgetWrapper {
     }
     
     // MARK: - two rows
+
+    private var compactUnits: Bool {
+        self.compact && self.unitsState && self.speedUnit == NetworkSpeedUnitAuto
+    }
+
+    private func twoRowValue(_ value: Int64) -> String {
+        let readable = Units(bytes: value).getReadableSpeed(base: base, unit: self.speedUnit, omitUnits: !self.unitsState)
+        return self.compactUnits ? readable.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "/s", with: "") : readable
+    }
     
     private func drawTwoRows() -> CGFloat {
         var width: CGFloat = 7
@@ -345,18 +354,18 @@ public class SpeedWidget: WidgetWrapper {
         }
         
         if self.valueState {
-            let rowWidth: CGFloat = self.unitsState ? 48 : 30
+            let rowWidth: CGFloat = self.unitsState ? (self.compactUnits ? 38 : 48) : 30
             let rowHeight: CGFloat = self.frame.height / 2
             let style = NSMutableParagraphStyle()
             style.alignment = self.valueAlignment
             
             let inputStringAttributes = [
-                NSAttributedString.Key.font: NSFont.systemFont(ofSize: 9, weight: .light),
+                NSAttributedString.Key.font: self.compactUnits ? NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .regular) : NSFont.systemFont(ofSize: 9, weight: .light),
                 NSAttributedString.Key.foregroundColor: self.inputColor(self.valueColorState),
                 NSAttributedString.Key.paragraphStyle: style
             ]
             let outputStringAttributes = [
-                NSAttributedString.Key.font: NSFont.systemFont(ofSize: 9, weight: .light),
+                NSAttributedString.Key.font: self.compactUnits ? NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .regular) : NSFont.systemFont(ofSize: 9, weight: .light),
                 NSAttributedString.Key.foregroundColor: self.outputColor(self.valueColorState),
                 NSAttributedString.Key.paragraphStyle: style
             ]
@@ -366,14 +375,14 @@ public class SpeedWidget: WidgetWrapper {
             
             var rect = CGRect(x: Constants.Widget.margin.x + x, y: inputY, width: rowWidth - (Constants.Widget.margin.x*2), height: rowHeight)
             let input = NSAttributedString.init(
-                string: Units(bytes: self.inputValue).getReadableSpeed(base: base, unit: self.speedUnit, omitUnits: !self.unitsState),
+                string: self.twoRowValue(self.inputValue),
                 attributes: inputStringAttributes
             )
             input.draw(with: rect)
             
             rect = CGRect(x: Constants.Widget.margin.x + x, y: outputY, width: rowWidth - (Constants.Widget.margin.x*2), height: rowHeight)
             let output = NSAttributedString.init(
-                string: Units(bytes: self.outputValue).getReadableSpeed(base: base, unit: self.speedUnit, omitUnits: !self.unitsState),
+                string: self.twoRowValue(self.outputValue),
                 attributes: outputStringAttributes
             )
             output.draw(with: rect)
@@ -679,6 +688,11 @@ public class SpeedWidget: WidgetWrapper {
         
         if updated {
             DispatchQueue.main.async(execute: {
+                if self.compactUnits {
+                    let input = Units(bytes: self.inputValue).getReadableSpeed(base: self.base, unit: self.speedUnit)
+                    let output = Units(bytes: self.outputValue).getReadableSpeed(base: self.base, unit: self.speedUnit)
+                    self.toolTip = "\(localizedString(self.words.input)): \(input)\n\(localizedString(self.words.output)): \(output)"
+                }
                 self.needsDisplay = true
             })
         }

@@ -77,6 +77,8 @@ internal class Popup: PopupWrapper {
     
     internal func setup(_ values: [Sensor_p]? = nil, reload: Bool = false) {
         guard let values = reload ? self.sensors : values else { return }
+        self.settingsView.arrangedSubviews.filter { $0.identifier?.rawValue == "fan-curve-settings" }.forEach { $0.removeFromSuperview() }
+        self.settingsView.addArrangedSubview(FanCurveSettingsView(sensors: values))
         let fans = values.filter({ $0.type == .fan && $0.popupState })
         var sensors = values
         if !self.unknownSensorsState {
@@ -613,6 +615,7 @@ internal class FanView: NSStackView {
             height: view.frame.height - 8
         ), mode: self.fan.mode)
         buttons.callback = { [weak self] (mode: FanMode) in
+            if let self { FanCurveController.shared.disable(fan: self.fan.id) }
             if let fan = self?.fan, mode == .automatic || fan.mode != mode {
                 self?.fan.mode = mode
                 self?.fan.customMode = mode
@@ -621,6 +624,7 @@ internal class FanView: NSStackView {
             self?.toggleControlView(mode == .forced)
         }
         buttons.off = { [weak self] in
+            if let self { FanCurveController.shared.disable(fan: self.fan.id) }
             if let fan = self?.fan {
                 if self?.fan.mode != .forced {
                     self?.fan.mode = .forced
@@ -633,6 +637,7 @@ internal class FanView: NSStackView {
             self?.toggleControlView(false)
         }
         buttons.turbo = { [weak self] in
+            if let self { FanCurveController.shared.disable(fan: self.fan.id) }
             if let fan = self?.fan {
                 if self?.fan.mode != .forced {
                     self?.fan.mode = .forced
@@ -760,6 +765,7 @@ internal class FanView: NSStackView {
     }
     
     private func setSpeed(value: Int, then: @escaping () -> Void = {}) {
+        FanCurveController.shared.disable(fan: self.fan.id)
         self.sliderValueField?.stringValue = "\(value) RPM"
         self.sliderValueField?.textColor = .secondaryLabelColor
         self.fan.customSpeed = value

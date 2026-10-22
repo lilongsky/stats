@@ -68,6 +68,10 @@ internal class CombinedView: NSObject, NSGestureRecognizerDelegate {
     }
     
     public func enable() {
+        guard self.menuBarItem == nil else {
+            self.recalculate()
+            return
+        }
         self.menuBarItem = NSStatusBar.system.statusItem(withLength: 0)
         DispatchQueue.main.async(execute: {
             self.menuBarItem?.autosaveName = "CombinedModules"

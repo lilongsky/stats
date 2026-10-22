@@ -61,8 +61,8 @@ internal class Popup: PopupWrapper {
         self.distribution = .fill
         self.spacing = 0
         
-        self.addArrangedSubview(self.disks)
-        self.addArrangedSubview(self.initProcesses())
+        self.addPopupSection(self.disks, id: "disks", title: "磁盘列表")
+        self.addPopupSection(self.initProcesses(), id: "processes", title: "磁盘活动进程")
         
         self.recalculateHeight()
     }
@@ -209,7 +209,7 @@ internal class Popup: PopupWrapper {
             self.processesView?.removeFromSuperview()
             self.processesView = nil
             self.processes = nil
-            self.addArrangedSubview(self.initProcesses())
+            self.addPopupSection(self.initProcesses(), id: "processes", title: "磁盘活动进程")
             self.processesInitialized = false
             self.recalculateHeight()
         })

@@ -91,7 +91,7 @@ open class Window: NSStackView {
         
         self.isPreviewAvailable = config.previewConfig["available"] as? Bool ?? false
         
-        self.isPopupSettingsAvailable = config.settingsConfig["popup"] as? Bool ?? false
+        self.isPopupSettingsAvailable = popupSettings != nil
         self.isNotificationsSettingsAvailable = config.settingsConfig["notifications"] as? Bool ?? false
         
         super.init(frame: NSRect.zero)
@@ -292,10 +292,13 @@ open class Window: NSStackView {
         }
         
         for i in 0...list.count - 1 {
+            let settings = SettingsContainerView()
+            if let widget = list[i].item as? WidgetWrapper { settings.addArrangedSubview(widget.dimensionSettings()) }
+            settings.addArrangedSubview(list[i].item.settings())
             self.widgetSettingsContainer?.addArrangedSubview(WidgetSettings(
                 title: list[i].type.name(),
                 image: list[i].image,
-                settingsView: list[i].item.settings()
+                settingsView: settings
             ))
         }
     }
@@ -303,6 +306,9 @@ open class Window: NSStackView {
     private func loadPopupSettings() {
         self.popupSettingsContainer?.subviews.forEach{ $0.removeFromSuperview() }
         
+        if let popup = self.popupSettings as? PopupWrapper {
+            self.popupSettingsContainer?.addArrangedSubview(popup.customizationSettings())
+        }
         if let settingsView = self.popupSettings, let view = settingsView.settings() {
             self.popupSettingsContainer?.addArrangedSubview(view)
         } else {

@@ -374,6 +374,10 @@ public class Disk: Module {
             return
         }
         
+        HistoryArchive.shared.record(module: "Disk", metrics: [
+            HistoryMetric("read", "读取速度", "B/s", Double(d.activity.read)),
+            HistoryMetric("write", "写入速度", "B/s", Double(d.activity.write))
+        ])
         self.portalView.activityCallback(d)
         
         self.menuBar.widgets.filter{ $0.isActive }.forEach { (w: SWidget) in

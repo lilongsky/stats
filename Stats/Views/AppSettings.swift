@@ -26,6 +26,10 @@ class ApplicationSettings: NSStackView {
         get { Store.shared.bool(key: "CombinedModules", defaultValue: false) }
         set { Store.shared.set(key: "CombinedModules", value: newValue) }
     }
+    private var compactMenuBar: Bool {
+        get { Store.shared.bool(key: "CompactMenuBar", defaultValue: false) }
+        set { Store.shared.set(key: "CompactMenuBar", value: newValue) }
+    }
     private var combinedModulesIcon: Bool {
         get { Store.shared.bool(key: "CombinedModules_icon", defaultValue: false) }
         set { Store.shared.set(key: "CombinedModules_icon", value: newValue) }
@@ -123,6 +127,10 @@ class ApplicationSettings: NSStackView {
             PreferencesRow(localizedString("Keep the menubar items position"), component: switchView(
                 action: #selector(self.toggleMenuBarPosition),
                 state: self.keepMenuBarPosition
+            )),
+            PreferencesRow(localizedString("Compact menu bar"), component: switchView(
+                action: #selector(self.toggleCompactMenuBar),
+                state: self.compactMenuBar
             )),
             PreferencesRow("macOS widgets", component: switchView(
                 action: #selector(self.toggleSystemWidgetsUpdatesState),
@@ -414,6 +422,11 @@ class ApplicationSettings: NSStackView {
     
     @objc private func toggleMenuBarPosition(_ sender: NSButton) {
         self.keepMenuBarPosition = sender.state == NSControl.StateValue.on
+    }
+
+    @objc private func toggleCompactMenuBar(_ sender: NSButton) {
+        self.compactMenuBar = sender.state == .on
+        NotificationCenter.default.post(name: .toggleOneView, object: nil)
     }
     
     @objc private func importSettings() {

@@ -251,6 +251,10 @@ public class Network: Module {
     private func usageCallback(_ raw: Network_Usage?) {
         guard let value = raw, self.enabled else { return }
         
+        HistoryArchive.shared.record(module: "Network", metrics: [
+            HistoryMetric("download", "下载速度", "B/s", Double(value.bandwidth.download)),
+            HistoryMetric("upload", "上传速度", "B/s", Double(value.bandwidth.upload))
+        ])
         self.popupView.usageCallback(value)
         self.portalView.usageCallback(value)
         self.notificationsView.usageCallback(value)

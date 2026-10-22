@@ -88,6 +88,7 @@ public class Sensors: Module {
     }
     
     public override func willTerminate() {
+        FanCurveController.shared.shutdown()
         guard SMCHelper.shared.isActive(), let reader = self.sensorsReader else { return }
         
         reader.list.sensors.filter({ $0 is Fan }).forEach { (s: Sensor_p) in
@@ -102,6 +103,12 @@ public class Sensors: Module {
     private func usageCallback(_ raw: Sensors_List?) {
         guard let value = raw, self.enabled else { return }
         
+        let historyKeys: Set<String> = ["Average CPU", "Hottest CPU", "Average GPU", "Hottest GPU", "Average SOC", "Hottest SOC", "CPU Power", "GPU Power", "ANE Power", "RAM Power"]
+        let recordedSensors = value.sensors.filter { $0 is Fan || $0.state || historyKeys.contains($0.key) || $0.key == self.selectedSensor }
+        HistoryArchive.shared.record(module: "Sensors", metrics: recordedSensors.map {
+            HistoryMetric($0.key, $0.name, $0.unit, $0.value)
+        })
+        DispatchQueue.main.async { FanCurveController.shared.update(value.sensors) }
         self.popupView.usageCallback(value.sensors)
         self.portalView.usageCallback(value.sensors)
         self.notificationsView.usageCallback(value.sensors)

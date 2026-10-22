@@ -16,7 +16,8 @@ open class NotificationsWrapper: NSStackView {
     public let module: String
     
     private var ids: [String: Bool?] = [:]
-    private var streak: [String: Int] = [:]
+    private var conditions: [String: SustainedCondition] = [:]
+    private let conditionLock = NSLock()
     
     public init(_ module: ModuleType, _ ids: [String] = []) {
         self.module = module.stringValue
@@ -27,8 +28,22 @@ open class NotificationsWrapper: NSStackView {
         self.distribution = .gravityAreas
         self.translatesAutoresizingMaskIntoConstraints = false
         self.spacing = Constants.Settings.margin
+        self.addArrangedSubview(self.durationSettings())
     }
     
+
+    public func durationSettings() -> NSView {
+        return PreferencesSection(title: "提醒规则", subtitle: "阈值连续满足指定时长后提醒，适用于本页的阈值规则。", [
+            PreferencesRow("持续时间", component: StepperInput(
+                Store.shared.int(key: "\(self.module)_notifications_durationSeconds", defaultValue: 2),
+                range: NSRange(location: 0, length: 3600), unit: "秒"
+            ) { [weak self] seconds in
+                guard let self else { return }
+                Store.shared.set(key: "\(self.module)_notifications_durationSeconds", value: seconds)
+            })
+        ])
+    }
+
     required public init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
@@ -43,36 +58,30 @@ open class NotificationsWrapper: NSStackView {
         for id in ids {
             let notificationID = "Stats_\(self.module)_\(id)"
             self.ids[notificationID] = nil
-            self.streak[notificationID] = 0
+            self.conditions[notificationID] = SustainedCondition()
             removeNotification(notificationID)
         }
     }
     
     public func checkDouble(id rid: String, value: Double, threshold: Double, title: String, subtitle: String, less: Bool = false, consecutive: Int = 2) {
         let id = "Stats_\(self.module)_\(rid)"
-        let first = less ? value > threshold : value < threshold
-        let second = less ? value <= threshold : value >= threshold
-
-        if self.ids[id] != nil, first {
-            removeNotification(id)
-            self.ids[id] = nil
-        }
-
-        if first {
-            self.streak[id] = 0
-        }
-
-        if self.ids[id] == nil && second {
-            let count = (self.streak[id] ?? 0) + 1
-            self.streak[id] = count
-            if count >= max(1, consecutive) {
-                self.showNotification(id: id, title: title, subtitle: subtitle)
-                self.ids[id] = true
-                self.streak[id] = 0
-            }
-        }
+        let satisfied = value.isFinite && threshold.isFinite && (less ? value <= threshold : value >= threshold)
+        let duration = TimeInterval(Store.shared.int(key: "\(self.module)_notifications_durationSeconds", defaultValue: 2))
+        let interval = TimeInterval(Store.shared.int(key: "\(self.module)_updateInterval", defaultValue: 1))
+        self.conditionLock.lock()
+        var condition = self.conditions[id] ?? SustainedCondition()
+        let shouldNotify = condition.evaluate(satisfied, now: ProcessInfo.processInfo.systemUptime,
+                                              duration: duration, maximumGap: max(10, interval * 2.5),
+                                              signature: "\(less)-\(threshold)")
+        self.conditions[id] = condition
+        let shouldRemove = !satisfied && self.ids[id] == true
+        if !satisfied { self.ids[id] = nil }
+        if shouldNotify { self.ids[id] = true }
+        self.conditionLock.unlock()
+        if shouldRemove { removeNotification(id) }
+        if shouldNotify { self.showNotification(id: id, title: title, subtitle: subtitle) }
     }
-    
+
     public func newNotification(id rid: String, title: String, subtitle: String? = nil) {
         let id = "Stats_\(self.module)_\(rid)"
         
@@ -87,12 +96,14 @@ open class NotificationsWrapper: NSStackView {
     
     public func hideNotification(_ rid: String) {
         let id = "Stats_\(self.module)_\(rid)"
-        if self.ids[id] != nil {
-            removeNotification(id)
-            self.ids[id] = nil
-        }
+        self.conditionLock.lock()
+        self.conditions.removeValue(forKey: id)
+        let active = self.ids[id] != nil
+        self.ids[id] = nil
+        self.conditionLock.unlock()
+        if active { removeNotification(id) }
     }
-    
+
     private func showNotification(id: String, title: String, subtitle: String? = nil) {
         let content = UNMutableNotificationContent()
         content.title = title

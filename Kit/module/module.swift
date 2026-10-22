@@ -169,6 +169,7 @@ open class Module {
         )
         
         self.popup = PopupWindow(title: self.config.name, module: self.moduleType, view: self.popupView, visibilityCallback: self.popupVisibilityCallback)
+        (self.popupView as? PopupWrapper)?.previewAction = { [weak self] in self?.popup?.showPreview() }
     }
     
     deinit {

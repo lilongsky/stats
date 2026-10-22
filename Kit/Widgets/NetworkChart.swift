@@ -23,7 +23,7 @@ public class NetworkChart: WidgetWrapper {
     
     private var points: [(Double, Double)] = Array(repeating: (0, 0), count: 60)
     
-    private var width: CGFloat {
+    internal var automaticGraphWidth: CGFloat {
         get {
             switch self.historyCount {
             case 30:
@@ -40,6 +40,8 @@ public class NetworkChart: WidgetWrapper {
         }
     }
     
+    private var width: CGFloat { self.configuredDimension(self.automaticGraphWidth) }
+
     private var historyNumbers: [KeyValue_p] = [
         KeyValue_t(key: "30", value: "30"),
         KeyValue_t(key: "60", value: "60"),

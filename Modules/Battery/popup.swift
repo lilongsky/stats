@@ -62,10 +62,10 @@ internal class Popup: PopupWrapper {
         self.spacing = 0
         self.orientation = .vertical
         
-        self.addArrangedSubview(self.initDashboard())
-        self.addArrangedSubview(self.initDetails())
-        self.addArrangedSubview(self.initBattery())
-        self.addArrangedSubview(self.initProcesses())
+        self.addPopupSection(self.initDashboard(), id: "dashboard", title: "电量概览")
+        self.addPopupSection(self.initDetails(), id: "details", title: "详细信息")
+        self.addPopupSection(self.initBattery(), id: "battery", title: "电池健康")
+        self.addPopupSection(self.initProcesses(), id: "processes", title: "耗电进程")
         
         self.recalculateHeight()
     }
@@ -396,7 +396,7 @@ internal class Popup: PopupWrapper {
             self.processesView?.removeFromSuperview()
             self.processesView = nil
             self.processes = nil
-            self.addArrangedSubview(self.initProcesses())
+            self.addPopupSection(self.initProcesses(), id: "processes", title: "耗电进程")
             self.processesInitialized = false
             self.recalculateHeight()
         })

@@ -197,6 +197,11 @@ public class CPU: Module {
     private func loadCallback(_ raw: CPU_Load?) {
         guard let value = raw, self.enabled else { return }
         
+        HistoryArchive.shared.record(module: "CPU", metrics: [
+            HistoryMetric("usage", "CPU 使用率", "%", value.totalUsage * 100),
+            HistoryMetric("system", "系统 CPU", "%", value.systemLoad * 100),
+            HistoryMetric("user", "用户 CPU", "%", value.userLoad * 100)
+        ])
         self.popupView.loadCallback(value)
         self.portalView.callback(value)
         self.notificationsView.loadCallback(value)

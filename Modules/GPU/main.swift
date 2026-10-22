@@ -178,6 +178,9 @@ public class GPU: Module {
             return
         }
         
+        var metrics = [HistoryMetric("usage", "GPU 使用率", "%", utilization * 100)]
+        if let fps = selectedGPU.fps { metrics.append(HistoryMetric("fps", "GPU 帧率", "FPS", fps)) }
+        HistoryArchive.shared.record(module: "GPU", metrics: metrics)
         self.popupView.loadCallback(selectedGPU)
         self.portalView.callback(selectedGPU)
         self.notificationsView.usageCallback(utilization)

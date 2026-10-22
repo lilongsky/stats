@@ -37,23 +37,27 @@ public class LineChart: WidgetWrapper {
         KeyValue_t(key: "90", value: "90"),
         KeyValue_t(key: "120", value: "120")
     ]
-    private var width: CGFloat {
+    internal var automaticGraphWidth: CGFloat {
         get {
+            let width: CGFloat
             switch self.historyCount {
             case 30:
-                return 24
+                width = 24
             case 60:
-                return 32
+                width = 32
             case 90:
-                return 42
+                width = 42
             case 120:
-                return 52
+                width = 52
             default:
-                return 32
+                width = 32
             }
+            return self.compact ? max(24, width - 8) : width
         }
     }
     
+    private var width: CGFloat { self.configuredDimension(self.automaticGraphWidth) }
+
     private var boxSettingsView: NSSwitch? = nil
     private var frameSettingsView: NSSwitch? = nil
     

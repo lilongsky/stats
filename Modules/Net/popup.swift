@@ -137,13 +137,13 @@ internal class Popup: PopupWrapper {
         self.interfaceDetailsState = Store.shared.bool(key: "\(self.title)_interfaceDetails", defaultValue: self.interfaceDetailsState)
         self.emojiCCState = Store.shared.bool(key: "\(self.title)_emojiCC", defaultValue: self.emojiCCState)
         
-        self.addArrangedSubview(self.initDashboard())
-        self.addArrangedSubview(self.initChart())
-        self.addArrangedSubview(self.initConnectivityChart())
-        self.addArrangedSubview(self.initDetails())
-        self.addArrangedSubview(self.initInterface())
-        self.addArrangedSubview(self.initAddress())
-        self.addArrangedSubview(self.initProcesses())
+        self.addPopupSection(self.initDashboard(), id: "dashboard", title: "流量概览")
+        self.addPopupSection(self.initChart(), id: "history", title: "速度历史")
+        self.addPopupSection(self.initConnectivityChart(), id: "connectivity", title: "连接质量")
+        self.addPopupSection(self.initDetails(), id: "details", title: "流量详情")
+        self.addPopupSection(self.initInterface(), id: "interface", title: "网络接口")
+        self.addPopupSection(self.initAddress(), id: "address", title: "IP 地址")
+        self.addPopupSection(self.initProcesses(), id: "processes", title: "高占用进程")
         
         if !self.publicIPState {
             self.addressView?.removeFromSuperview()
@@ -406,7 +406,7 @@ internal class Popup: PopupWrapper {
             self.processesView?.removeFromSuperview()
             self.processesView = nil
             self.processes = nil
-            self.addArrangedSubview(self.initProcesses())
+            self.addPopupSection(self.initProcesses(), id: "processes", title: "高占用进程")
             self.processesInitialized = false
             self.recalculateHeight()
         })

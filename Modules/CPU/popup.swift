@@ -151,11 +151,11 @@ internal class Popup: PopupWrapper {
         self.lineChartScale = Scale.fromString(Store.shared.string(key: "\(self.title)_lineChartScale", defaultValue: self.lineChartScale.key))
         self.lineChartFixedScale = Double(Store.shared.int(key: "\(self.title)_lineChartFixedScale", defaultValue: 100)) / 100
         
-        self.addArrangedSubview(self.initDashboard())
-        self.addArrangedSubview(self.initChart())
-        self.addArrangedSubview(self.initDetails())
-        self.addArrangedSubview(self.initAverage())
-        self.addArrangedSubview(self.initProcesses())
+        self.addPopupSection(self.initDashboard(), id: "dashboard", title: "仪表")
+        self.addPopupSection(self.initChart(), id: "history", title: "负载历史")
+        self.addPopupSection(self.initDetails(), id: "details", title: "详细信息")
+        self.addPopupSection(self.initAverage(), id: "average", title: "平均负载")
+        self.addPopupSection(self.initProcesses(), id: "processes", title: "高占用进程")
         
         self.recalculateHeight()
     }
@@ -516,7 +516,7 @@ internal class Popup: PopupWrapper {
             self.processesView?.removeFromSuperview()
             self.processesView = nil
             self.processes = nil
-            self.addArrangedSubview(self.initProcesses())
+            self.addPopupSection(self.initProcesses(), id: "processes", title: "高占用进程")
             self.initializedProcesses = false
             self.recalculateHeight()
         })

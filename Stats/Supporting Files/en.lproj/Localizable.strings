@@ -10,6 +10,10 @@
 //
 
 // Modules
+"Compact menu bar" = "Default compact icons";
+"Open Terminal" = "Open Terminal";
+"Open Console" = "Open Console";
+"Open Disk Utility" = "Open Disk Utility";
 "CPU" = "CPU";
 "Open CPU settings" = "Open CPU settings";
 "GPU" = "GPU";
@@ -570,3 +574,10 @@
 "Login to System Stats to see your devices" = "Login to System Stats to see your devices";
 "Monitor HTTP, ICMP and custom endpoints" = "Monitor HTTP, ICMP and custom endpoints";
 "Monitor and control your Macs from anywhere. Sign in to your System Stats account to see all your devices and hosts in one place." = "Monitor and control your Macs from anywhere. Sign in to your System Stats account to see all your devices and hosts in one place.";
+
+
+"Compact widget size" = "Compact size";
+
+/* Calendar navigation */
+"Today" = "Today";
+"Return to today" = "Return to today";

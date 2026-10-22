@@ -117,6 +117,10 @@ public class Battery: Module {
     private func usageCallback(_ raw: Battery_Usage?) {
         guard let value = raw, self.enabled else { return }
         
+        var metrics = [HistoryMetric("level", "电量", "%", value.level * 100),
+                       HistoryMetric("power", "电池功率", "W", abs(value.batteryPower))]
+        if let temperature = value.temperature { metrics.append(HistoryMetric("temperature", "电池温度", "°C", temperature)) }
+        HistoryArchive.shared.record(module: "Battery", metrics: metrics)
         self.popupView.usageCallback(value)
         self.portalView.loadCallback(value)
         self.notificationsView.usageCallback(value)

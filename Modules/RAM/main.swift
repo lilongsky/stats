@@ -150,6 +150,12 @@ public class RAM: Module {
     private func loadCallback(_ raw: RAM_Usage?) {
         guard let value = raw, self.enabled else { return }
         
+        HistoryArchive.shared.record(module: "RAM", metrics: [
+            HistoryMetric("usage", "内存使用率", "%", value.usage * 100),
+            HistoryMetric("used", "已用内存", "B", value.used),
+            HistoryMetric("compressed", "压缩内存", "B", value.compressed),
+            HistoryMetric("swap", "交换区", "B", value.swap.used)
+        ])
         self.popupView.loadCallback(value)
         self.portalView.callback(value)
         self.notificationsView.loadCallback(value)

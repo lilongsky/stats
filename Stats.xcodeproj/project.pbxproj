@@ -224,6 +224,13 @@
 		9AF9EE0F2464875F005D2270 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AF9EE0E2464875F005D2270 /* main.swift */; };
 		9AF9EE1124648ADC005D2270 /* readers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AF9EE1024648ADC005D2270 /* readers.swift */; };
 		AA00000000000000000000A1 /* libIOReport.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 5C1E45552D11D66200525864 /* libIOReport.tbd */; };
+		554DB7502186B88AF6EA2A18 /* HistoryArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62563F320B4B8C55B665CA95 /* HistoryArchive.swift */; };
+		45420509B6F295DB875AB8B9 /* HistoryWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20BD7CAD6E80730194DE457B /* HistoryWindow.swift */; };
+		5A7C5E5B8E0B9B001C5C487C /* LocalControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D452B2A3BAAF036F0B9FEA /* LocalControls.swift */; };
+		36B8E46F122CA6C8D023CE71 /* LocalModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B067B057F49F4F86CB92710E /* LocalModels.swift */; };
+		BF131F65DA15FFF26263C908 /* PopupFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 572EBB9A8CE48BFA58DC22C4 /* PopupFeatures.swift */; };
+		A8CC839DB85351BE6E9ADBCD /* WidgetSizing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 590975E4B9ABF2645629E88A /* WidgetSizing.swift */; };
+		E549B82AE798B64E34A90754 /* FanCurveController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BB7337785638460E5185331 /* FanCurveController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -783,6 +790,13 @@
 		CE47845D298F55F900F564FD /* th */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = th; path = th.lproj/Localizable.strings; sourceTree = "<group>"; };
 		F8A38F83253303A8006D4D81 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
 		FCBD9253255C7D9900E1621A /* pt-BR */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "pt-BR"; path = "pt-BR.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		62563F320B4B8C55B665CA95 /* HistoryArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Kit/Local/HistoryArchive.swift; sourceTree = SOURCE_ROOT; };
+		20BD7CAD6E80730194DE457B /* HistoryWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Kit/Local/HistoryWindow.swift; sourceTree = SOURCE_ROOT; };
+		99D452B2A3BAAF036F0B9FEA /* LocalControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Kit/Local/LocalControls.swift; sourceTree = SOURCE_ROOT; };
+		B067B057F49F4F86CB92710E /* LocalModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Kit/Local/LocalModels.swift; sourceTree = SOURCE_ROOT; };
+		572EBB9A8CE48BFA58DC22C4 /* PopupFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Kit/Local/PopupFeatures.swift; sourceTree = SOURCE_ROOT; };
+		590975E4B9ABF2645629E88A /* WidgetSizing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Kit/Local/WidgetSizing.swift; sourceTree = SOURCE_ROOT; };
+		8BB7337785638460E5185331 /* FanCurveController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Modules/Sensors/Local/FanCurveController.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1099,6 +1113,12 @@
 		9A2846F82666A9CC00EC1F6D /* Kit */ = {
 			isa = PBXGroup;
 			children = (
+				590975E4B9ABF2645629E88A /* WidgetSizing.swift */,
+				572EBB9A8CE48BFA58DC22C4 /* PopupFeatures.swift */,
+				B067B057F49F4F86CB92710E /* LocalModels.swift */,
+				99D452B2A3BAAF036F0B9FEA /* LocalControls.swift */,
+				20BD7CAD6E80730194DE457B /* HistoryWindow.swift */,
+				62563F320B4B8C55B665CA95 /* HistoryArchive.swift */,
 				9A28473E2666AA1500EC1F6D /* Widgets */,
 				9A2848642666ABA500EC1F6D /* Supporting Files */,
 				9A28498D2666AE3400EC1F6D /* module */,
@@ -1363,6 +1383,7 @@
 		9AE29AD6249A50350071B02D /* Sensors */ = {
 			isa = PBXGroup;
 			children = (
+				8BB7337785638460E5185331 /* FanCurveController.swift */,
 				9AE29AF1249A50CD0071B02D /* main.swift */,
 				9AE29AF9249A53780071B02D /* readers.swift */,
 				9A58DE9D24B363D800716A9F /* popup.swift */,
@@ -2239,6 +2260,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A8CC839DB85351BE6E9ADBCD /* WidgetSizing.swift in Sources */,
+				BF131F65DA15FFF26263C908 /* PopupFeatures.swift in Sources */,
+				36B8E46F122CA6C8D023CE71 /* LocalModels.swift in Sources */,
+				5A7C5E5B8E0B9B001C5C487C /* LocalControls.swift in Sources */,
+				45420509B6F295DB875AB8B9 /* HistoryWindow.swift in Sources */,
+				554DB7502186B88AF6EA2A18 /* HistoryArchive.swift in Sources */,
 				5C8E001029269C7F0027C75A /* protocol.swift in Sources */,
 				5C621D822B4770D6004ED7AF /* process.swift in Sources */,
 				9AD7F866266F759200E5F863 /* smc.swift in Sources */,
@@ -2386,6 +2413,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E549B82AE798B64E34A90754 /* FanCurveController.swift in Sources */,
 				5CA518382B543FE600EBCCC4 /* portal.swift in Sources */,
 				5CF2211B2B1F8CEF006C583F /* notifications.swift in Sources */,
 				9A46C05F266D85F8001A1117 /* smc.swift in Sources */,

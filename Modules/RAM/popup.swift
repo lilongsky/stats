@@ -13,7 +13,6 @@ import Cocoa
 import Kit
 
 internal class Popup: PopupWrapper {
-    private var grid: NSGridView? = nil
     
     private let dashboardHeight: CGFloat = 90
     private let chartHeight: CGFloat = 90 + Constants.Popup.separatorHeight
@@ -86,21 +85,13 @@ internal class Popup: PopupWrapper {
         self.lineChartScale = Scale.fromString(Store.shared.string(key: "\(self.title)_lineChartScale", defaultValue: self.lineChartScale.key))
         self.lineChartFixedScale = Double(Store.shared.int(key: "\(self.title)_lineChartFixedScale", defaultValue: 100)) / 100
         
-        let gridView: NSGridView = NSGridView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: self.frame.height))
-        gridView.rowSpacing = 0
-        gridView.yPlacement = .fill
-        
-        gridView.addRow(with: [self.initDashboard()])
-        gridView.addRow(with: [self.initChart()])
-        gridView.addRow(with: [self.initDetails()])
-        gridView.addRow(with: [self.initProcesses()])
-        
-        gridView.row(at: 0).height = self.dashboardHeight
-        gridView.row(at: 1).height = self.chartHeight
-        gridView.row(at: 2).height = self.detailsHeight
-        
-        self.addSubview(gridView)
-        self.grid = gridView
+        self.orientation = .vertical
+        self.spacing = 0
+        self.addPopupSection(self.initDashboard(), id: "dashboard", title: "内存概览")
+        self.addPopupSection(self.initChart(), id: "history", title: "负载历史")
+        self.addPopupSection(self.initDetails(), id: "details", title: "详细信息")
+        self.addPopupSection(self.initProcesses(), id: "processes", title: "高占用进程")
+
     }
     
     required init?(coder: NSCoder) {
@@ -126,12 +117,9 @@ internal class Popup: PopupWrapper {
             let h: CGFloat = self.dashboardHeight + self.chartHeight + self.detailsHeight + self.processesHeight
             self.setFrameSize(NSSize(width: self.frame.width, height: h))
             
-            self.grid?.setFrameSize(NSSize(width: self.frame.width, height: h))
-            
-            self.grid?.row(at: 3).cell(at: 0).contentView?.removeFromSuperview()
+            self.popupSection("processes")?.removeFromSuperview()
             self.processes = nil
-            self.grid?.removeRow(at: 3)
-            self.grid?.addRow(with: [self.initProcesses()])
+            self.addPopupSection(self.initProcesses(), id: "processes", title: "高占用进程")
             self.processesInitialized = false
             
             self.sizeCallback?(self.frame.size)
@@ -184,6 +172,7 @@ internal class Popup: PopupWrapper {
     
     private func initChart() -> NSView  {
         let view: NSView = NSView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: self.chartHeight))
+        view.heightAnchor.constraint(equalToConstant: view.frame.height).isActive = true
         let separator = separatorView(localizedString("Usage history"), origin: NSPoint(x: 0, y: self.chartHeight-Constants.Popup.separatorHeight), width: self.frame.width)
         let container: NSView = NSView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: separator.frame.origin.y))
         container.wantsLayer = true
@@ -203,6 +192,7 @@ internal class Popup: PopupWrapper {
     
     private func initDetails() -> NSView  {
         let view: NSView = NSView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: self.detailsHeight))
+        view.heightAnchor.constraint(equalToConstant: view.frame.height).isActive = true
         let separator = separatorView(localizedString("Details"), origin: NSPoint(x: 0, y: self.detailsHeight-Constants.Popup.separatorHeight), width: self.frame.width)
         let container: NSStackView = NSStackView(frame: NSRect(x: 0, y: 0, width: view.frame.width, height: separator.frame.origin.y))
         container.orientation = .vertical
@@ -226,6 +216,7 @@ internal class Popup: PopupWrapper {
         if self.numberOfProcesses == 0 { return NSView() }
         
         let view: NSView = NSView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: self.processesHeight))
+        view.heightAnchor.constraint(equalToConstant: view.frame.height).isActive = true
         let separator = separatorView(localizedString("Top processes"), origin: NSPoint(x: 0, y: self.processesHeight-Constants.Popup.separatorHeight), width: self.frame.width)
         let container: ProcessesView = ProcessesView(
             frame: NSRect(x: 0, y: 0, width: self.frame.width, height: separator.frame.origin.y),

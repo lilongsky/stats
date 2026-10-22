@@ -32,8 +32,9 @@ public class DB {
     
     init() {
         let fileManager = FileManager.default
-        let supportPath = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("Stats")
-        let tmpPath = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("Stats")
+        let directoryName = Bundle.main.bundleIdentifier == "eu.exelban.Stats.Compact" ? "Stats Compact" : "Stats"
+        let supportPath = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent(directoryName)
+        let tmpPath = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(directoryName)
         
         try? fileManager.createDirectory(at: supportPath, withIntermediateDirectories: true, attributes: nil)
         try? fileManager.createDirectory(at: tmpPath, withIntermediateDirectories: true, attributes: nil)

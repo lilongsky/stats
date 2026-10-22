@@ -10,6 +10,10 @@
 //
 
 // Modules
+"Compact menu bar" = "預設緊湊圖示";
+"Open Terminal" = "開啟終端機";
+"Open Console" = "開啟主控台";
+"Open Disk Utility" = "開啟磁碟工具程式";
 "CPU" = "CPU";
 "Open CPU settings" = "打開CPU設定";
 "GPU" = "GPU";
@@ -570,3 +574,10 @@
 "Login to System Stats to see your devices" = "登入 System Stats 以查看您的裝置"; // qwen3.8:27b
 "Monitor HTTP, ICMP and custom endpoints" = "監控 HTTP、ICMP 及自訂端點"; // qwen3.8:27b
 "Monitor and control your Macs from anywhere. Sign in to your System Stats account to see all your devices and hosts in one place." = "從任何地方監控並控制您的 Mac。登入您的 System Stats 帳戶，即可在同一處查看所有裝置和主機。"; // qwen3.8:27b
+
+
+"Compact widget size" = "緊湊尺寸";
+
+/* Calendar navigation */
+"Today" = "今天";
+"Return to today" = "回到今天";

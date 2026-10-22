@@ -2019,6 +2019,7 @@ public class StepperInput: NSStackView, NSTextFieldDelegate, PreferencesSwitchWi
             }
         }
         
+        self.stepperView.doubleValue = Double(v)/100
         self.callback(v)
     }
     
@@ -2026,6 +2027,11 @@ public class StepperInput: NSStackView, NSTextFieldDelegate, PreferencesSwitchWi
         let value = Int((sender.doubleValue*100).rounded())
         self.valueView.stringValue = "\(value)"
         self.callback(value)
+    }
+
+    public func updateValue(_ value: Int) {
+        self.valueView.stringValue = "\(value)"
+        self.stepperView.doubleValue = Double(value)/100
     }
     
     @objc private func onUnitChange(_ sender: NSMenuItem) {

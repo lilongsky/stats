@@ -14,3 +14,9 @@ SMC/smc
 
 Cartfile.resolved
 web
+
+# Local compact build and private verification artifacts
+/build/
+/Stats Compact*.zip
+/evidence/
+/before-*/

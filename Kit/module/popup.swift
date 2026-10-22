@@ -43,6 +43,10 @@ public protocol Popup_p: NSView {
 
 open class PopupWrapper: NSStackView, Popup_p {
     public var title: String
+    public var previewAction: (() -> Void)?
+    internal var popupSectionTitles: [String: String] = [:]
+    internal var popupSectionOrder: [String] = []
+    internal var popupSectionHeights: [String: CGFloat] = [:]
     public var keyboardShortcut: [UInt16] = []
     open var sizeCallback: ((NSSize) -> Void)? = nil
     
@@ -119,6 +123,15 @@ public class PopupWindow: NSWindow, NSWindowDelegate {
         self.viewController.setCloseButton(true)
         self.locked = true
     }
+
+    public func showPreview() {
+        self.contentView?.invalidateIntrinsicContentSize()
+        self.center()
+        self.makeKeyAndOrderFront(nil)
+        self.locked = true
+        self.viewController.setCloseButton(true)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
     
     public func windowDidResignKey(_ notification: Notification) {
         if self.locked {
@@ -187,6 +200,7 @@ internal class PopupView: NSView {
     
     private let header: HeaderView
     private let body: NSScrollView
+    private let footer: PopupFooterView
     
     override var intrinsicContentSize: CGSize {
         return CGSize(width: self.frame.width, height: self.frame.height)
@@ -195,6 +209,7 @@ internal class PopupView: NSView {
     private var containerHeight: CGFloat?
     
     init(frame: NSRect, module: ModuleType) {
+        self.footer = PopupFooterView(module: module)
         self.header = HeaderView(frame: NSRect(
             x: 0,
             y: frame.height - Constants.Popup.headerHeight,
@@ -235,6 +250,7 @@ internal class PopupView: NSView {
         self.addSubview(self.foreground, positioned: .below, relativeTo: .none)
         self.addSubview(self.header)
         self.addSubview(self.body)
+        self.addSubview(self.footer)
     }
     
     required init?(coder: NSCoder) {
@@ -247,11 +263,12 @@ internal class PopupView: NSView {
     
     fileprivate func setView(_ view: Popup_p?) {
         self.view = view
+        (view as? PopupWrapper)?.applySectionLayout()
         
         var isScrollVisible: Bool = false
         var size: NSSize = NSSize(
             width: (view?.frame.width ?? Constants.Popup.width) + (Constants.Popup.margins*2),
-            height: (view?.frame.height ?? 0) + Constants.Popup.headerHeight + (Constants.Popup.margins*2)
+            height: (view?.frame.height ?? 0) + Constants.Popup.headerHeight + PopupFooterView.height + (Constants.Popup.margins*2)
         )
         
         self.windowHeight = NSScreen.main?.visibleFrame.height // for height recalculate when appear/disappear
@@ -273,7 +290,8 @@ internal class PopupView: NSView {
         if let view = view {
             self.body.documentView = view
             view.sizeCallback = { [weak self] size in
-                self?.recalculateHeight(size)
+                let displayedSize = (self?.view as? PopupWrapper)?.applySectionLayout() ?? size
+                self?.recalculateHeight(displayedSize)
             }
         }
     }
@@ -287,6 +305,7 @@ internal class PopupView: NSView {
     }
     
     internal func appear() {
+        (self.view as? PopupWrapper)?.applySectionLayout()
         self.view?.appear()
         
         self.display()
@@ -311,7 +330,7 @@ internal class PopupView: NSView {
         var isScrollVisible: Bool = false
         var windowSize: NSSize = NSSize(
             width: size.width + (Constants.Popup.margins*2),
-            height: size.height + Constants.Popup.headerHeight + (Constants.Popup.margins*2)
+            height: size.height + Constants.Popup.headerHeight + PopupFooterView.height + (Constants.Popup.margins*2)
         )
         let h0 = self.containerHeight ?? 0
         
@@ -331,7 +350,7 @@ internal class PopupView: NSView {
         self.resizeBody(windowSize, scrollVisible: isScrollVisible)
         self.header.setFrameOrigin(NSPoint(
             x: self.header.frame.origin.x,
-            y: self.body.frame.height + (Constants.Popup.margins*2)
+            y: windowSize.height - Constants.Popup.headerHeight
         ))
         
         if let documentView = self.body.documentView {
@@ -344,14 +363,137 @@ internal class PopupView: NSView {
     }
     
     private func resizeBody(_ windowSize: NSSize, scrollVisible: Bool) {
+        self.footer.frame = NSRect(x: 0, y: 0, width: windowSize.width, height: PopupFooterView.height)
         let offset: CGFloat = scrollVisible ? 20 : 0
         let isRTL = self.body.userInterfaceLayoutDirection == .rightToLeft
         self.body.frame = NSRect(
             x: Constants.Popup.margins - (isRTL ? offset : 0),
-            y: Constants.Popup.margins,
+            y: Constants.Popup.margins + PopupFooterView.height,
             width: windowSize.width - (Constants.Popup.margins*2) + offset,
-            height: windowSize.height - Constants.Popup.headerHeight - (Constants.Popup.margins*2)
+            height: max(0, windowSize.height - Constants.Popup.headerHeight - PopupFooterView.height - (Constants.Popup.margins*2))
         )
+    }
+}
+
+// AppKit application icons and launch APIs; no iStat assets or code are used.
+internal final class PopupFooterView: NSView {
+    static let height: CGFloat = 42
+    private let module: ModuleType
+    private let buttons = NSStackView()
+
+    init(module: ModuleType) {
+        self.module = module
+        super.init(frame: NSRect(x: 0, y: 0, width: Constants.Popup.width, height: Self.height))
+        let separator = NSBox()
+        separator.boxType = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        self.addSubview(separator)
+        self.buttons.orientation = .horizontal
+        self.buttons.spacing = 8
+        self.buttons.alignment = .centerY
+        self.buttons.translatesAutoresizingMaskIntoConstraints = false
+        self.addSubview(self.buttons)
+        NSLayoutConstraint.activate([
+            separator.topAnchor.constraint(equalTo: self.topAnchor),
+            separator.leadingAnchor.constraint(equalTo: self.leadingAnchor, constant: Constants.Popup.margins),
+            separator.trailingAnchor.constraint(equalTo: self.trailingAnchor, constant: -Constants.Popup.margins),
+            self.buttons.centerXAnchor.constraint(equalTo: self.centerXAnchor),
+            self.buttons.centerYAnchor.constraint(equalTo: self.centerYAnchor)
+        ])
+        NotificationCenter.default.addObserver(self, selector: #selector(optionsChanged(_:)), name: .localPopupOptionsChanged, object: nil)
+        self.reload()
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    deinit { NotificationCenter.default.removeObserver(self) }
+    @objc private func optionsChanged(_ note: Notification) {
+        if note.object as? String == self.module.stringValue { self.reload() }
+    }
+    private func reload() {
+        self.buttons.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for id in FooterTools.items(self.module.stringValue) where id != "none" {
+            let button = PopupFooterButton(image: FooterTools.icon(id)) { [weak self] in self?.openTool(id) }
+            button.toolTip = "打开" + FooterTools.title(id)
+            button.setAccessibilityLabel(button.toolTip)
+            button.identifier = NSUserInterfaceItemIdentifier("footer-" + id)
+            button.isEnabled = FooterTools.url(id) != nil
+            self.buttons.addArrangedSubview(button)
+        }
+        if FooterTools.historyModules.contains(self.module.stringValue) {
+            if let lastTool = self.buttons.arrangedSubviews.last {
+                self.buttons.setCustomSpacing(12, after: lastTool)
+                let divider = NSBox()
+                divider.boxType = .separator
+                divider.widthAnchor.constraint(equalToConstant: 1).isActive = true
+                divider.heightAnchor.constraint(equalToConstant: 18).isActive = true
+                self.buttons.addArrangedSubview(divider)
+                self.buttons.setCustomSpacing(12, after: divider)
+            }
+            let image = NSImage(systemSymbolName: "clock.arrow.circlepath", accessibilityDescription: "历史回看")?
+                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 18, weight: .regular)) ?? NSImage()
+            let history = PopupFooterButton(image: image) { [weak self] in
+                guard let self else { return }
+                HistoryWindow.show(module: self.module.stringValue)
+                self.window?.setIsVisible(false)
+            }
+            history.contentTintColor = .secondaryLabelColor
+            history.toolTip = "历史回看"
+            history.setAccessibilityLabel("历史回看")
+            history.identifier = NSUserInterfaceItemIdentifier("footer-history")
+            self.buttons.addArrangedSubview(history)
+        }
+    }
+    private func openTool(_ id: String) {
+        guard let url = FooterTools.url(id) else { return }
+        if id == "activity", let tab = self.module.activityMonitorTab {
+            UserDefaults(suiteName: "com.apple.ActivityMonitor")?.set(tab, forKey: "SelectedTab")
+        }
+        if !url.isFileURL {
+            if NSWorkspace.shared.open(url) { self.window?.setIsVisible(false) }
+            return
+        }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
+            DispatchQueue.main.async {
+                if let error { NSAlert(error: error).runModal() }
+                else { self?.window?.setIsVisible(false) }
+            }
+        }
+    }
+}
+
+internal final class PopupFooterButton: NSButton {
+    private let handler: () -> Void
+    private var hovered = false
+
+    init(image: NSImage, action: @escaping () -> Void) {
+        self.handler = action
+        super.init(frame: .zero)
+        self.title = ""
+        self.image = image.copy() as? NSImage
+        self.image?.size = NSSize(width: 20, height: 20)
+        self.imagePosition = .imageOnly
+        self.imageScaling = .scaleProportionallyDown
+        self.isBordered = false
+        self.focusRingType = .none
+        self.target = self
+        self.action = #selector(invoke)
+        self.widthAnchor.constraint(equalToConstant: 32).isActive = true
+        self.heightAnchor.constraint(equalToConstant: 30).isActive = true
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    @objc private func invoke() { self.handler() }
+    override func updateTrackingAreas() {
+        self.trackingAreas.forEach(self.removeTrackingArea)
+        self.addTrackingArea(NSTrackingArea(rect: .zero, options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited], owner: self))
+        super.updateTrackingAreas()
+    }
+    override func mouseEntered(with event: NSEvent) { self.hovered = true; self.needsDisplay = true }
+    override func mouseExited(with event: NSEvent) { self.hovered = false; self.needsDisplay = true }
+    override func draw(_ dirtyRect: NSRect) {
+        if self.isEnabled && (self.hovered || self.isHighlighted) {
+            NSColor.labelColor.withAlphaComponent(self.isHighlighted ? 0.14 : 0.08).setFill()
+            NSBezierPath(roundedRect: self.bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6).fill()
+        }
+        super.draw(dirtyRect)
     }
 }
 

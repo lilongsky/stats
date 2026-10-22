@@ -43,9 +43,9 @@ internal class Popup: PopupWrapper {
         self.distribution = .fill
         self.spacing = 0
         
-        self.addArrangedSubview(self.initDashboard())
-        self.addArrangedSubview(self.initChart())
-        self.addArrangedSubview(self.initDetails())
+        self.addPopupSection(self.initDashboard(), id: "dashboard", title: "仪表")
+        self.addPopupSection(self.initChart(), id: "history", title: "负载历史")
+        self.addPopupSection(self.initDetails(), id: "details", title: "详细信息")
         
         self.recalculateHeight()
     }

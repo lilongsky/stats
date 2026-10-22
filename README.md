@@ -1,3 +1,11 @@
+# Stats Compact fork
+
+Independent fork of [exelban/stats](https://github.com/exelban/stats), based on v3.0.22. Adds individually configurable compact menu items, contextual popup tools and continuous calendar navigation.
+
+See [FORK.md](FORK.md) for the full changes, local build instructions, validation and upstream contribution policy. The original MIT license and author notices are preserved. This branch is maintained independently and is not an official Stats release.
+
+---
+
 # Stats
 
 <a href="https://github.com/exelban/stats/releases"><p align="center"><img src="https://github.com/exelban/stats/raw/master/Stats/Supporting%20Files/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" width="120"></p></a>

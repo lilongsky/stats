@@ -175,7 +175,18 @@ private class CalendarView: NSStackView {
         return Array(weekdaySymbols![firstWeekdayIndex...]) + weekdaySymbols![..<firstWeekdayIndex]
     }
     
-    private var grid: NSGridView = NSGridView()
+    private var weekdayHeader = NSGridView()
+    private let scrollView = NSScrollView()
+    private let document = CalendarDocumentView()
+    private var dayViews: [CalendarItemView] = []
+    private var weekNumberViews: [NSTextField] = []
+    private weak var hoveredDay: CalendarItemView?
+    private var firstWeek: Date?
+    private var monthAnchorRow: Int?
+    private let weekCount = 48
+    private let anchorRow = 20
+    private var rebuilding = false
+    private var scrollHeightConstraint: NSLayoutConstraint?
     private var current: NSTextField = NSTextField()
     
     init(_ width: CGFloat, showWeekNumbers: Bool) {
@@ -186,7 +197,7 @@ private class CalendarView: NSStackView {
         self.day = Calendar.current.component(.day, from: Date())
         
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: width - 32))
-        self.setAccessibilityElement(true)
+        self.setAccessibilityElement(false)
         
         self.spacing = 0
         self.orientation = .vertical
@@ -201,36 +212,51 @@ private class CalendarView: NSStackView {
         
         self.updateItemSize()
         self.addArrangedSubview(self.navigation())
+        self.scrollView.drawsBackground = false
+        self.scrollView.contentView.drawsBackground = false
+        self.scrollView.hasVerticalScroller = false
+        self.scrollView.hasHorizontalScroller = false
+        self.scrollView.horizontalScrollElasticity = .none
+        self.scrollView.verticalScrollElasticity = .none
+        self.scrollView.documentView = self.document
+        self.document.hoverChanged = { [weak self] point in self?.updateHover(at: point) }
+        self.scrollView.contentView.postsBoundsChangedNotifications = true
+        self.scrollView.identifier = NSUserInterfaceItemIdentifier("clock-calendar-scroll")
+        self.scrollView.setAccessibilityLabel("日历，可连续滚动浏览月份")
+        self.scrollView.widthAnchor.constraint(equalToConstant: width - Constants.Popup.margins * 2).isActive = true
+        self.scrollHeightConstraint = self.scrollView.heightAnchor.constraint(equalToConstant: self.itemSize.height * 6)
+        self.scrollHeightConstraint?.isActive = true
+        self.addArrangedSubview(self.scrollView)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.scrolled),
+            name: NSView.boundsDidChangeNotification, object: self.scrollView.contentView)
         self.setup()
     }
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
     
     public func checkCurrentDay() {
         guard self.day != self.currentDay || self.month != self.currentMonth || self.year != self.currentYear else { return }
-        
-        self.year = self.currentYear
-        self.month = self.currentMonth
-        self.day = self.currentDay
-        
-        self.setup()
+        self.goToToday()
     }
     
     public func setShowWeekNumbers(_ state: Bool) {
         guard self.showWeekNumbers != state else { return }
+        let position = self.visiblePosition()
         self.showWeekNumbers = state
         self.updateItemSize()
-        self.setup()
+        self.setup(keeping: position)
     }
     
     override func updateLayer() {
         self.layer?.backgroundColor = (isDarkMode ? NSColor(red: 17/255, green: 17/255, blue: 17/255, alpha: 0.25) : NSColor(red: 245/255, green: 245/255, blue: 245/255, alpha: 1)).cgColor
     }
     
-    private func setup() {
-        self.grid.removeFromSuperview()
+    private func setup(keeping position: (week: Date, offset: CGFloat)? = nil) {
+        self.weekdayHeader.removeFromSuperview()
         
         let grid = NSGridView()
         grid.rowSpacing = 0
@@ -243,20 +269,147 @@ private class CalendarView: NSStackView {
         headerRow.append(contentsOf: self.weekDays.map { headerItem($0) })
         grid.addRow(with: headerRow)
           
-        let weeks = self.generateDays(for: self.month, in: self.year)
-        for week in weeks {
-            var labels: [NSView] = []
-            if self.showWeekNumbers {
-                labels.append(self.weekNumberItem(week))
-            }
-            labels.append(contentsOf: week.map { rowItem($0) })
-            grid.addRow(with: labels)
-        }
-        
-        self.grid = grid
+        self.weekdayHeader = grid
         self.current.stringValue = "\(Calendar.current.standaloneMonthSymbols[self.month-1]) \(self.year)"
-        
-        self.addArrangedSubview(grid)
+        self.insertArrangedSubview(grid, at: 1)
+        let monthStart = Calendar.current.date(from: DateComponents(year: self.year, month: self.month, day: 1)) ?? Date()
+        self.rebuild(around: position?.week ?? self.weekStart(containing: monthStart), offset: position?.offset ?? 0)
+    }
+
+    private func weekStart(containing date: Date) -> Date {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: date)
+        let days = (calendar.component(.weekday, from: start) - calendar.firstWeekday + 7) % 7
+        return calendar.date(byAdding: .day, value: -days, to: start) ?? start
+    }
+
+    private func visiblePosition() -> (week: Date, offset: CGFloat)? {
+        guard let firstWeek else { return nil }
+        let y = max(0, self.scrollView.contentView.bounds.minY)
+        let row = Int(floor(y / self.itemSize.height))
+        guard let week = Calendar.current.date(byAdding: .day, value: row * 7, to: firstWeek) else { return nil }
+        return (week, y - CGFloat(row) * self.itemSize.height)
+    }
+
+    // Reuse the fixed-size date buffer. Recreating a constraint-based grid here
+    // stalls the main thread while a trackpad gesture is still in progress.
+    private func rebuild(around week: Date, offset: CGFloat) {
+        let calendar = Calendar.current
+        guard let first = calendar.date(byAdding: .day, value: -self.anchorRow * 7, to: week) else { return }
+        self.rebuilding = true
+        self.setHoveredDay(nil)
+        self.firstWeek = first
+        self.monthAnchorRow = nil
+        let today = calendar.dateComponents([.year, .month, .day], from: Date())
+        let dateColumnOffset: CGFloat = self.showWeekNumbers ? 1 : 0
+        self.weekNumberViews.forEach { $0.isHidden = !self.showWeekNumbers }
+        for row in 0..<self.weekCount {
+            guard let weekDate = calendar.date(byAdding: .day, value: row * 7, to: first) else { continue }
+            if self.showWeekNumbers {
+                if row == self.weekNumberViews.count {
+                    let number = self.weekNumberItem()
+                    self.weekNumberViews.append(number)
+                    self.document.addSubview(number)
+                }
+                let number = self.weekNumberViews[row]
+                number.frame = NSRect(x: 0, y: CGFloat(row) * self.itemSize.height,
+                                      width: self.itemSize.width, height: self.itemSize.height)
+                number.stringValue = "\(calendar.component(.weekOfYear, from: weekDate))"
+            }
+            for column in 0..<7 {
+                guard let date = calendar.date(byAdding: .day, value: column, to: weekDate) else { continue }
+                let components = calendar.dateComponents([.era, .year, .month, .day], from: date)
+                let index = row * 7 + column
+                let isToday = components.year == today.year && components.month == today.month && components.day == today.day
+                let isOutOfMonth = components.month != self.month || components.year != self.year
+                if index == self.dayViews.count {
+                    let item = CalendarItemView(components, size: self.itemSize, isToday: isToday, isOutOfMonth: isOutOfMonth)
+                    self.dayViews.append(item)
+                    self.document.addSubview(item)
+                }
+                self.dayViews[index].update(components,
+                    frame: NSRect(x: (CGFloat(column) + dateColumnOffset) * self.itemSize.width,
+                                  y: CGFloat(row) * self.itemSize.height,
+                                  width: self.itemSize.width, height: self.itemSize.height),
+                    isToday: isToday, isOutOfMonth: isOutOfMonth)
+            }
+        }
+        let size = NSSize(width: self.frame.width - Constants.Popup.margins * 2,
+                          height: self.itemSize.height * CGFloat(self.weekCount))
+        self.document.setFrameSize(size)
+        self.scrollView.contentView.scroll(to: NSPoint(x: 0, y: CGFloat(self.anchorRow) * self.itemSize.height + offset))
+        self.scrollView.reflectScrolledClipView(self.scrollView.contentView)
+        self.rebuilding = false
+        self.updateVisibleMonth()
+        self.refreshHover()
+    }
+
+    @objc private func scrolled() {
+        guard !self.rebuilding, self.firstWeek != nil else { return }
+        let row = self.scrollView.contentView.bounds.minY / self.itemSize.height
+        if (row < 6 || row > CGFloat(self.weekCount - 12)), let position = self.visiblePosition() {
+            self.rebuild(around: position.week, offset: position.offset)
+        } else {
+            self.updateVisibleMonth()
+            self.refreshHover()
+        }
+    }
+
+    private func setHoveredDay(_ day: CalendarItemView?) {
+        guard self.hoveredDay !== day else { return }
+        self.hoveredDay?.setHovered(false)
+        self.hoveredDay = day
+        day?.setHovered(true)
+    }
+
+    private func updateHover(at point: NSPoint?) {
+        guard let point, self.window != nil else { self.setHoveredDay(nil); return }
+        let clip = self.scrollView.contentView
+        let location = clip.convert(point, from: nil)
+        guard clip.bounds.contains(location) else { self.setHoveredDay(nil); return }
+        let gridPoint = self.document.convert(location, from: clip)
+        let row = Int(floor(gridPoint.y / self.itemSize.height))
+        let column = Int(floor(gridPoint.x / self.itemSize.width)) - (self.showWeekNumbers ? 1 : 0)
+        guard row >= 0, row < self.weekCount, column >= 0, column < 7 else { self.setHoveredDay(nil); return }
+        self.setHoveredDay(self.dayViews[row * 7 + column])
+    }
+
+    private func refreshHover() {
+        let window = self.window
+        self.updateHover(at: window?.isKeyWindow == true && NSApp.isActive ? window?.mouseLocationOutsideOfEventStream : nil)
+    }
+
+    private func updateVisibleMonth() {
+        let row = Int(floor((self.scrollView.contentView.bounds.minY + self.itemSize.height / 2) / self.itemSize.height))
+        guard self.monthAnchorRow != row else { return }
+        guard let position = self.visiblePosition(),
+              let date = Calendar.current.date(byAdding: .day,
+                value: position.offset >= self.itemSize.height / 2 ? 13 : 6, to: position.week) else { return }
+        self.monthAnchorRow = row
+        let calendar = Calendar.current
+        self.year = calendar.component(.year, from: date)
+        self.month = calendar.component(.month, from: date)
+        let title = "\(calendar.standaloneMonthSymbols[self.month-1]) \(self.year)"
+        guard self.current.stringValue != title else { return }
+        self.current.stringValue = title
+        self.dayViews.forEach { $0.setDisplayedMonth(self.month, year: self.year) }
+    }
+
+    private func moveMonth(_ offset: Int) {
+        let calendar = Calendar.current
+        guard let date = calendar.date(from: DateComponents(year: self.year, month: self.month, day: 1)),
+              let target = calendar.date(byAdding: .month, value: offset, to: date),
+              let firstWeek else { return }
+        let targetWeek = self.weekStart(containing: target)
+        let days = calendar.dateComponents([.day], from: firstWeek, to: targetWeek).day ?? 0
+        let row = CGFloat(days) / 7
+        if row >= 6 && row <= CGFloat(self.weekCount - 12) {
+            self.scrollView.contentView.scroll(to: NSPoint(x: 0, y: row * self.itemSize.height))
+            self.scrollView.reflectScrolledClipView(self.scrollView.contentView)
+            self.scrolled()
+        } else {
+            self.rebuild(around: targetWeek, offset: 0)
+        }
     }
     
     private func navigation() -> NSView {
@@ -277,6 +430,15 @@ private class CalendarView: NSStackView {
         let buttons = NSStackView()
         buttons.orientation = .horizontal
         buttons.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let today = NSButton(title: localizedString("Today"), target: self, action: #selector(self.goToToday))
+        today.bezelStyle = .rounded
+        today.controlSize = .small
+        today.font = .systemFont(ofSize: 11, weight: .medium)
+        today.focusRingType = .none
+        today.toolTip = localizedString("Return to today")
+        today.identifier = NSUserInterfaceItemIdentifier("clock-calendar-today")
+        today.setAccessibilityLabel(localizedString("Return to today"))
         
         let prev = NSButton()
         prev.bezelStyle = .regularSquare
@@ -302,6 +464,7 @@ private class CalendarView: NSStackView {
         next.toolTip = localizedString("Next month")
         next.focusRingType = .none
         
+        buttons.addArrangedSubview(today)
         buttons.addArrangedSubview(prev)
         buttons.addArrangedSubview(next)
         
@@ -319,6 +482,7 @@ private class CalendarView: NSStackView {
             height: (self.frame.width-(Constants.Popup.spacing*2))/8 - 4
         )
         self.navigationHeightConstraint?.constant = max(self.itemSize.height, 24)
+        self.scrollHeightConstraint?.constant = self.itemSize.height * 6
     }
     
     private func headerItem(_ value: String) -> NSView {
@@ -331,11 +495,6 @@ private class CalendarView: NSStackView {
         view.widthAnchor.constraint(equalToConstant: self.itemSize.width).isActive = true
         view.heightAnchor.constraint(equalToConstant: self.itemSize.height).isActive = true
         return view
-    }
-    
-    private func rowItem(_ day: DateComponents) -> NSView {
-        let isToday = day.year == self.currentYear && day.month == self.currentMonth && day.day == self.currentDay
-        return CalendarItemView(day, size: self.itemSize, isToday: isToday, isOutOfMonth: day.month != self.month)
     }
     
     private func weekNumberHeaderItem() -> NSView {
@@ -351,34 +510,33 @@ private class CalendarView: NSStackView {
         return view
     }
     
-    private func weekNumberItem(_ week: [DateComponents]) -> NSView {
-        let calendar = Calendar.current
-        let firstDate = week.compactMap { calendar.date(from: $0) }.first ?? Date()
-        let weekNumber = calendar.component(.weekOfYear, from: firstDate)
-        
-        let view = NSTextField()
-        let cell = VerticallyCenteredTextFieldCell(textCell: "\(weekNumber)")
+    private func weekNumberItem() -> NSTextField {
+        let view = NSTextField(frame: NSRect(origin: .zero, size: self.itemSize))
+        let cell = VerticallyCenteredTextFieldCell(textCell: "")
         view.cell = cell
         view.alignment = .center
         view.textColor = .secondaryLabelColor
         view.font = .systemFont(ofSize: 10, weight: .medium)
-        view.widthAnchor.constraint(equalToConstant: self.itemSize.width).isActive = true
-        view.heightAnchor.constraint(equalToConstant: self.itemSize.height).isActive = true
-        self.addRightBorder(view)
+        self.addRightBorder(view, fixedFrame: true)
         return view
     }
     
-    private func addRightBorder(_ view: NSView) {
+    private func addRightBorder(_ view: NSView, fixedFrame: Bool = false) {
         let border = NSView()
         border.wantsLayer = true
         let borderColor = self.isDarkMode
             ? NSColor.white.withAlphaComponent(0.4)
             : NSColor.separatorColor
         border.layer?.backgroundColor = borderColor.cgColor
-        border.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(border)
         
         let lineWidth = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
+        if fixedFrame {
+            border.frame = NSRect(x: view.bounds.maxX - lineWidth, y: 0, width: lineWidth, height: view.bounds.height)
+            border.autoresizingMask = [.minXMargin, .height]
+            return
+        }
+        border.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             border.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             border.topAnchor.constraint(equalTo: view.topAnchor),
@@ -387,180 +545,106 @@ private class CalendarView: NSStackView {
         ])
     }
     
-    private func generateDays(for month: Int, in year: Int) -> [[DateComponents]] {
-        let calendar = Calendar.current
-        let dateComponents = DateComponents(year: year, month: month)
-        
-        guard let firstDayOfMonth = calendar.date(from: dateComponents),
-              let range = calendar.range(of: .day, in: .month, for: firstDayOfMonth),
-              let firstWeekdayOfMonth = calendar.dateComponents([.weekday], from: firstDayOfMonth).weekday else {
-            return []
-        }
-        
-        let localeFirstWeekday = calendar.firstWeekday
-        let daysFromPreviousMonth = (firstWeekdayOfMonth - localeFirstWeekday + 7) % 7
-        
-        var previousMonthComponents = dateComponents
-        previousMonthComponents.month = (month == 1) ? 12 : month - 1
-        previousMonthComponents.year = (month == 1) ? year - 1 : year
-        
-        guard let previousMonthDate = calendar.date(from: previousMonthComponents),
-              let previousMonthRange = calendar.range(of: .day, in: .month, for: previousMonthDate) else {
-            return []
-        }
-        let lastDayOfPreviousMonth = previousMonthRange.upperBound - 1
-        
-        var nextMonthComponents = dateComponents
-        nextMonthComponents.month = (month == 12) ? 1 : month + 1
-        nextMonthComponents.year = (month == 12) ? year + 1 : year
-        
-        var weeks = [[DateComponents]]()
-        var currentWeek = [DateComponents]()
-        let validDaysFromPreviousMonth = min(daysFromPreviousMonth, lastDayOfPreviousMonth)
-        if validDaysFromPreviousMonth > 0 {
-            for day in (lastDayOfPreviousMonth - validDaysFromPreviousMonth + 1)...lastDayOfPreviousMonth {
-                var components = previousMonthComponents
-                components.day = day
-                currentWeek.append(components)
-            }
-        }
-        
-        for day in range {
-            var components = dateComponents
-            components.day = day
-            currentWeek.append(components)
-            if currentWeek.count == 7 {
-                weeks.append(currentWeek)
-                currentWeek = []
-            }
-        }
-        
-        var nextMonthDay = 1
-        while currentWeek.count < 7 {
-            var components = nextMonthComponents
-            components.day = nextMonthDay
-            currentWeek.append(components)
-            nextMonthDay += 1
-        }
-        weeks.append(currentWeek)
-        
-        if weeks.count < 6 {
-            currentWeek = []
-            for _ in 1...7 {
-                var components = nextMonthComponents
-                components.day = nextMonthDay
-                currentWeek.append(components)
-                nextMonthDay += 1
-            }
-            weeks.append(currentWeek)
-        }
-        
-        return weeks
-    }
-    
-    @objc private func prevMonth() {
-        self.month -= 1
-        if self.month < 1 {
-            self.month = 12
-            self.year -= 1
-        }
+    @objc private func goToToday() {
+        let today = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        self.year = today.year ?? self.currentYear
+        self.month = today.month ?? self.currentMonth
+        self.day = today.day ?? self.currentDay
         self.setup()
     }
-    @objc private func nextMonth() {
-        self.month += 1
-        if self.month > 12 {
-            self.month = 1
-            self.year += 1
-        }
-        self.setup()
+
+    @objc private func prevMonth() { self.moveMonth(-1) }
+    @objc private func nextMonth() { self.moveMonth(1) }
+}
+
+private final class CalendarDocumentView: NSView {
+    var hoverChanged: ((NSPoint?) -> Void)?
+    override var isFlipped: Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        self.window?.acceptsMouseMovedEvents = true
+        self.hoverChanged?(nil)
     }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        self.trackingAreas.forEach(self.removeTrackingArea)
+        self.addTrackingArea(NSTrackingArea(rect: .zero,
+            options: [.mouseEnteredAndExited, .mouseMoved, .activeInActiveApp, .inVisibleRect], owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) { self.hoverChanged?(event.locationInWindow) }
+    override func mouseMoved(with event: NSEvent) { self.hoverChanged?(event.locationInWindow) }
+    override func mouseExited(with event: NSEvent) { self.hoverChanged?(nil) }
 }
 
 private class CalendarItemView: NSView {
-    private let components: DateComponents
-    private let isHoverable: Bool
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.dateFormat = DateFormatter.dateFormat(fromTemplate: "yyyyMMdd", options: 0, locale: .current)
+        return formatter
+    }()
+    private var components: DateComponents
+    private var isHoverable: Bool { !self.isToday }
+    private var isToday: Bool
+    private let field = NSTextField()
+    private let circle = NSView()
+    private var hovered = false
     
     private let app = URL(fileURLWithPath: "/System/Applications/Calendar.app")
     
     init(_ components: DateComponents, size: NSSize, isToday: Bool, isOutOfMonth: Bool) {
         self.components = components
-        self.isHoverable = !isToday
+        self.isToday = isToday
         
         super.init(frame: NSRect(x: 0, y: 0, width: size.width, height: size.height))
         
         self.wantsLayer = true
         self.layer?.cornerRadius = 4
-        self.toolTip = self.formattedDate()
-        self.widthAnchor.constraint(equalToConstant: size.width).isActive = true
-        self.heightAnchor.constraint(equalToConstant: size.height).isActive = true
-        
-        let field = NSTextField()
-        field.translatesAutoresizingMaskIntoConstraints = false
+        let field = self.field
         let cell = VerticallyCenteredTextFieldCell(textCell: "\(components.day ?? 0)")
         field.cell = cell
         field.alignment = .center
-        
-        if isToday {
-            let circleSize: CGFloat = min(size.width, size.height) - 3
-            let circle = NSView()
-            circle.translatesAutoresizingMaskIntoConstraints = false
-            circle.wantsLayer = true
-            circle.layer?.backgroundColor = NSColor.systemRed.cgColor
-            circle.layer?.cornerRadius = circleSize/2
-            
-            field.textColor = .white
-            
-            self.addSubview(circle)
-            self.addSubview(field)
-            
-            NSLayoutConstraint.activate([
-                circle.widthAnchor.constraint(equalToConstant: circleSize),
-                circle.heightAnchor.constraint(equalToConstant: circleSize),
-                circle.centerXAnchor.constraint(equalTo: self.centerXAnchor),
-                circle.centerYAnchor.constraint(equalTo: self.centerYAnchor, constant: 0.5),
-                field.centerXAnchor.constraint(equalTo: self.centerXAnchor),
-                field.centerYAnchor.constraint(equalTo: self.centerYAnchor)
-            ])
-        } else {
-            if isOutOfMonth {
-                field.textColor = .lightGray
-            }
-            self.addSubview(field)
-            NSLayoutConstraint.activate([
-                field.centerXAnchor.constraint(equalTo: self.centerXAnchor),
-                field.centerYAnchor.constraint(equalTo: self.centerYAnchor)
-            ])
-        }
-        
-        NSLayoutConstraint.activate([
-            field.widthAnchor.constraint(equalToConstant: size.width),
-            field.heightAnchor.constraint(equalToConstant: size.height)
-        ])
+        self.circle.wantsLayer = true
+        self.circle.layer?.backgroundColor = NSColor.systemRed.cgColor
+        self.addSubview(self.circle)
+        self.addSubview(field)
+        self.update(components, frame: self.frame, isToday: isToday, isOutOfMonth: isOutOfMonth)
     }
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        self.trackingAreas.forEach { self.removeTrackingArea($0) }
-        guard self.isHoverable else { return }
-        self.addTrackingArea(NSTrackingArea(
-            rect: self.bounds,
-            options: [.mouseEnteredAndExited, .activeInActiveApp],
-            owner: self,
-            userInfo: nil
-        ))
+
+    func update(_ components: DateComponents, frame: NSRect, isToday: Bool, isOutOfMonth: Bool) {
+        self.setHovered(false)
+        self.components = components
+        self.isToday = isToday
+        self.frame = frame
+        self.field.frame = self.bounds
+        self.field.stringValue = "\(components.day ?? 0)"
+        self.field.textColor = isToday ? .white : (isOutOfMonth ? .lightGray : .labelColor)
+        let diameter = min(frame.width, frame.height) - 3
+        self.circle.frame = NSRect(x: (frame.width - diameter) / 2,
+                                   y: (frame.height - diameter) / 2 + 0.5,
+                                   width: diameter, height: diameter)
+        self.circle.layer?.cornerRadius = diameter / 2
+        self.circle.isHidden = !isToday
+        self.toolTip = self.formattedDate()
     }
     
-    override func mouseEntered(with event: NSEvent) {
-        guard self.isHoverable else { return }
-        self.layer?.backgroundColor = NSColor.gray.withAlphaComponent(0.2).cgColor
+    func setDisplayedMonth(_ month: Int, year: Int) {
+        guard !self.isToday else { return }
+        self.field.textColor = self.components.month == month && self.components.year == year ? .labelColor : .lightGray
     }
-    
-    override func mouseExited(with event: NSEvent) {
-        self.layer?.backgroundColor = .clear
+
+    func setHovered(_ state: Bool) {
+        let state = state && self.isHoverable
+        guard self.hovered != state else { return }
+        self.hovered = state
+        self.layer?.backgroundColor = state ? NSColor.gray.withAlphaComponent(0.2).cgColor : .clear
     }
     
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -581,10 +665,7 @@ private class CalendarItemView: NSView {
     
     private func formattedDate() -> String? {
         guard let date = Calendar.current.date(from: self.components) else { return nil }
-        let formatter = DateFormatter()
-        formatter.locale = .current
-        formatter.dateFormat = DateFormatter.dateFormat(fromTemplate: "yyyyMMdd", options: 0, locale: .current)
-        return formatter.string(from: date)
+        return Self.dateFormatter.string(from: date)
     }
 }
 

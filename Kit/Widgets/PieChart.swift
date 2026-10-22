@@ -73,20 +73,26 @@ public class PieChart: WidgetWrapper {
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+
     
     private func draw() {
-        let x: CGFloat = self.labelState ? 8 + Constants.Widget.spacing : 0
-        
         self.labelView = WidgetLabelView(self.title, height: self.frame.height)
-        self.labelView!.isHidden = !self.labelState
-        
         self.addSubview(self.labelView!)
         self.addSubview(self.chart)
-        
-        self.chart.frame = NSRect(x: x, y: 0, width: self.frame.size.height, height: self.frame.size.height)
-        
-        self.setFrameSize(NSSize(width: self.size + x, height: self.frame.size.height))
-        self.setWidth(self.size + x)
+        self.updateLayout()
+    }
+
+    public override func compactChanged() {
+        self.updateLayout()
+        super.compactChanged()
+    }
+
+    private func updateLayout() {
+        let diameter: CGFloat = self.configuredDimension(self.compact && !self.labelState ? 18 : self.frame.height)
+        let x: CGFloat = self.labelState ? 8 + Constants.Widget.spacing : 0
+        self.labelView?.isHidden = !self.labelState
+        self.chart.frame = NSRect(x: x, y: ((self.frame.height - diameter) / 2).rounded(), width: diameter, height: diameter)
+        self.setWidth(diameter + x)
     }
     
     public func setValue(_ list: [ColorValue]) {
@@ -128,10 +134,7 @@ public class PieChart: WidgetWrapper {
         self.labelState = controlState(sender)
         Store.shared.set(key: "\(self.title)_\(self.type.rawValue)_label", value: self.labelState)
         
-        let x = self.labelState ? 6 + Constants.Widget.spacing : 0
-        self.labelView!.isHidden = !self.labelState
-        self.chart.setFrameOrigin(NSPoint(x: x, y: 0))
-        self.setWidth(self.labelState ? self.size+x : self.size)
+        self.updateLayout()
     }
     
     @objc private func toggleMonochrome(_ sender: NSControl) {

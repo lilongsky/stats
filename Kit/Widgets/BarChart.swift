@@ -123,12 +123,13 @@ public class BarChart: WidgetWrapper {
         
         var width: CGFloat = Constants.Widget.margin.x*2
         var x: CGFloat = 0
+        let compactBar = self.compact && !self.labelState && value.count == 1
         let lineWidth = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
         let offset = lineWidth / 2
         
         switch value.count {
         case 0, 1:
-            width += 10 + (offset*2)
+            width += compactBar ? 7 : 10 + (offset*2)
         case 2:
             width += 22
         case 3...4: // 3,4
@@ -145,6 +146,7 @@ public class BarChart: WidgetWrapper {
             width += 118
         }
         
+        width = max(CGFloat(value.count) * 2, self.configuredDimension(width))
         if self.labelState {
             let letterHeight = self.frame.height / 3
             let letterWidth: CGFloat = 6.0
@@ -162,12 +164,15 @@ public class BarChart: WidgetWrapper {
         
         let box = NSBezierPath(roundedRect: NSRect(
             x: x + offset,
-            y: offset,
+            y: compactBar ? ((self.frame.height - 16) / 2).rounded() : offset,
             width: width - x - (offset*2) - (Constants.Widget.margin.x*2),
-            height: self.frame.size.height - (offset*2)
+            height: compactBar ? 16 : self.frame.size.height - (offset*2)
         ), xRadius: 2, yRadius: 2)
         
-        if self.boxState {
+        if compactBar && !self.boxState {
+            (isDarkMode ? NSColor.white : NSColor.black).withAlphaComponent(0.2).setFill()
+            box.fill()
+        } else if self.boxState {
             (isDarkMode ? NSColor.white : NSColor.black).set()
             box.stroke()
             box.fill()
@@ -181,7 +186,7 @@ public class BarChart: WidgetWrapper {
         
         x += offset
         for i in 0..<value.count {
-            var y = offset
+            var y = box.bounds.minY
             for a in 0..<value[i].count {
                 let partitionValue = value[i][a]
                 let partitionHeight = maxPartitionHeight * CGFloat(partitionValue.value)

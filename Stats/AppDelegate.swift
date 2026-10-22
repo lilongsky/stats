@@ -62,6 +62,37 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     
     static func main() {
         let launchStart = Date()
+        // The separately named local build can run beside the installed Stats.
+        if Bundle.main.bundleIdentifier == "eu.exelban.Stats.Compact" {
+            let defaults = UserDefaults.standard
+            if !defaults.bool(forKey: "CompactVariantInitialized") {
+                let original = defaults.persistentDomain(forName: "eu.exelban.Stats") ?? [:]
+                let names = ["CPU", "GPU", "RAM", "Disk", "Network", "Battery", "Clock", "Sensors", "Bluetooth"]
+                for (key, value) in original where names.contains(where: { key.hasPrefix("\($0)_") }) {
+                    defaults.set(value, forKey: key)
+                }
+                for (position, name) in names.enumerated() {
+                    defaults.set(position, forKey: "\(name)_position")
+                }
+                defaults.set(false, forKey: "CombinedModules")
+                defaults.set(true, forKey: "CompactMenuBar")
+                defaults.set(false, forKey: "CombinedModules_icon")
+                defaults.set(false, forKey: "CombinedModules_popup")
+                defaults.set(false, forKey: "CombinedModules_separator")
+                defaults.set("4", forKey: "CombinedModules_spacing")
+                defaults.set(false, forKey: "Remote_state")
+                defaults.set("Never", forKey: "update-interval")
+                defaults.set(true, forKey: "setupProcess")
+                defaults.set(true, forKey: "CompactVariantInitialized")
+            }
+            if !defaults.bool(forKey: "CompactIndividualItemsInitialized") {
+                defaults.set(false, forKey: "CombinedModules")
+                for name in ["CPU", "GPU", "RAM", "Disk", "Network", "Battery", "Clock", "Sensors", "Bluetooth"] {
+                    defaults.set(false, forKey: "\(name)_oneView")
+                }
+                defaults.set(true, forKey: "CompactIndividualItemsInitialized")
+            }
+        }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         delegate.launchStart = launchStart
@@ -75,7 +106,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         self.suppressStatusBarTilingConstraintUpdates()
         self.parseArguments()
         self.parseVersion()
-        SMCHelper.shared.checkForUpdate()
+        if Bundle.main.bundleIdentifier != "eu.exelban.Stats.Compact" {
+            SMCHelper.shared.checkForUpdate()
+        }
         self.setup {
             modules.reversed().forEach{ $0.mount() }
             self.modulesMounted = true
@@ -100,10 +133,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         info("Stats started in \((startingPoint.timeIntervalSinceNow * -1).rounded(toPlaces: 4)) seconds")
         self.startTS = Date()
+        if Bundle.main.bundleIdentifier == "eu.exelban.Stats.Compact" {
+            self.ensureSettingsWindow().open(module: nil)
+        }
     }
     
     func applicationWillTerminate(_ aNotification: Notification) {
         modules.forEach{ $0.terminate() }
+        HistoryArchive.shared.flush()
         SystemStats.shared.terminate()
     }
     
