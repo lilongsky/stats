@@ -1,12 +1,178 @@
-# Stats Compact fork
+# Stats Compact
 
-Independent fork of [exelban/stats](https://github.com/exelban/stats), based on v3.0.22. Adds individually configurable compact menu items, contextual popup tools and continuous calendar navigation.
+Independent fork of [exelban/stats](https://github.com/exelban/stats), based on **v3.0.22**. It adds configurable compact menu items, popup tools, local history and continuous calendar navigation. The upstream MIT license and author notices are preserved.
 
-See [FORK.md](FORK.md) for the full changes, local build instructions, validation and upstream contribution policy. The original MIT license and author notices are preserved. This branch is maintained independently and is not an official Stats release.
+**[中文部署指南](README.zh-CN.md)** · **[Changes, validation and provenance](FORK.md)**
+
+## Deployment
+
+Build locally using the steps below. This fork currently has no custom GitHub release binary. The locally validated ZIP is an ad-hoc signed development package, not a notarized public release; validation on one Mac does not establish that another Mac will allow it.
+
+### 1. Prepare the Mac and the official resource dependency
+
+Use an **Apple Silicon Mac with macOS 14 or later**, Apple Command Line Tools, Python 3 and Git. The compiler targets macOS 12, but the required launch preflight uses `gktool`, which requires macOS 14 or later. This deployment procedure therefore requires macOS 14+.
+
+Install Command Line Tools if needed with `xcode-select --install`, then confirm that `xcrun --find swiftc`, `python3 --version` and `git --version` work.
+
+An official **Stats 3.0.22** bundle must be available at `/Applications/Stats.app`. Download that fixed version from the [upstream v3.0.22 release](https://github.com/exelban/stats/releases/tag/v3.0.22). If `/Applications/Stats.app` already exists, inspect its version first and preserve it; do not overwrite an existing official installation as part of deploying Compact. A different version must be resolved before continuing. Confirm the version with:
+
+```sh
+/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "/Applications/Stats.app/Contents/Info.plist"
+```
+
+The result must be `3.0.22`. **The build script does not validate this version for you.** Do not substitute a Homebrew or `latest` download for this fixed dependency.
+
+The first build copies unchanged resources, helpers and desktop widgets from the official bundle. Later builds use the existing `build/Stats Compact.app` as their resource template. A full build recompiles the main app and all monitoring frameworks; it does not regenerate every copied resource. The original `/Applications/Stats.app` is not modified.
+
+### 2. Clone and build
+
+The clone command refuses to reuse a nonempty `stats-compact` directory. Use a new destination or your existing checkout as appropriate.
+
+```sh
+mkdir -p "$HOME/Developer" &&
+cd "$HOME/Developer" &&
+git clone --branch codex/stats-compact --single-branch \
+  https://github.com/lilongsky/stats.git stats-compact &&
+cd stats-compact
+```
+
+**Quit every running copy of Stats Compact before building.** From the repository root, run the full build:
+
+```sh
+python3 build-local.py &&
+python3 check-local-app.py "build/Stats Compact.app"
+```
+
+The script compiles in a fresh staging bundle, ad-hoc signs the complete app, verifies its signature, and runs the Gatekeeper preflight when `gktool` is available. Compilation, signing and preflight failures occur before replacement of the existing build output. On success, the prior app and Swift modules are saved under `build/.previous-app-*`, then the new outputs are moved into place. These moves are sequential, not an atomic transaction across both directories; an interrupted replacement needs manual inspection.
+
+### 3. Install the complete bundle and launch
+
+**Quit Stats Compact before replacing an installed copy.** Run this from the repository root. It preserves an existing installation in a unique backup directory, then copies the entire bundle to an empty destination. `ditto` must not merge a new build into an existing app bundle.
+
+```sh
+(
+  set -eu
+  python3 check-local-app.py "build/Stats Compact.app"
+  compact_install="$HOME/Applications/Stats Compact.app"
+  mkdir -p "$HOME/Applications"
+  if [ -L "$compact_install" ]; then
+    printf '%s\n' "Stop: the installation path is a symbolic link; resolve it before installing." >&2
+    exit 1
+  fi
+  if [ -e "$compact_install" ]; then
+    compact_backup="$(mktemp -d "$HOME/Applications/Stats-Compact-backup.XXXXXX")"
+    mv "$compact_install" "$compact_backup/Stats Compact.app"
+    printf 'Previous installation saved to: %s\n' "$compact_backup"
+  fi
+  ditto "build/Stats Compact.app" "$compact_install"
+  python3 check-local-app.py "$compact_install" && open "$compact_install"
+)
+```
+
+The final check assesses the **installed path**. A failed copy or preflight stops the sequence before launch. Keep the printed backup path until the new installation has passed your checks.
+
+Before **every manual launch**, use the same guarded command from the repository root:
+
+```sh
+python3 check-local-app.py "$HOME/Applications/Stats Compact.app" &&
+open "$HOME/Applications/Stats Compact.app"
+```
+
+The preflight does not launch the app. It requires both a valid signature and an explicit Gatekeeper allowance. If you want launch at login, configure it in Compact's settings only after installing at the final path. Login settings are not migrated or registered by the build script; login launches do not run this Python command automatically.
+
+### Identity, settings and data
+
+| Item | Compact location or behavior |
+| --- | --- |
+| Bundle identifier and preference domain | `eu.exelban.Stats.Compact` |
+| Preferences | `~/Library/Preferences/eu.exelban.Stats.Compact.plist` |
+| Application data | `~/Library/Application Support/Stats Compact/` |
+| History database | `~/Library/Application Support/Stats Compact/history-v1/history.sqlite` |
+| Automatic updates | Initially set to `Never`; keep disabled and upgrade from source |
+
+At first initialization, Compact copies preferences with the official app's `CPU_`, `GPU_`, `RAM_`, `Disk_`, `Network_`, `Battery_`, `Clock_`, `Sensors_` and `Bluetooth_` prefixes, then applies its compact layout defaults. Official authentication, login-item and update settings are not migrated. The separate bundle identifier keeps subsequent Compact preferences and local history separate from official Stats.
+
+Normal app replacement does not reset these user data locations. For important data, quit Compact first and back up its **entire application-support directory**, including SQLite WAL files and the `lldb` cache, plus its preferences. Export the `eu.exelban.Stats.Compact` preference domain with `defaults export` to a new backup file. The `.previous-app-*` folders contain build outputs, not user data.
+
+### Upgrade and roll back
+
+Quit Compact, update the existing checkout, and perform a full build:
+
+```sh
+(
+  set -eu
+  cd "$HOME/Developer/stats-compact"
+  git pull --ff-only
+  python3 build-local.py
+  python3 check-local-app.py "build/Stats Compact.app"
+)
+```
+
+Then repeat the complete-bundle installation in step 3. Keep automatic updates set to `Never`: the upstream updater is not the deployment path for this fork.
+
+To roll back **only the installed app**, use the exact installation backup printed in step 3. This is also the recovery path if installation or its final preflight fails. Quit Compact, replace the placeholder, and run from the repository root:
+
+```sh
+(
+  set -eu
+  compact_saved="$HOME/Applications/Stats-Compact-backup.REPLACE_WITH_EXACT_NAME/Stats Compact.app"
+  compact_install="$HOME/Applications/Stats Compact.app"
+  test -d "$compact_saved"
+  test ! -L "$compact_install"
+  python3 check-local-app.py "$compact_saved"
+  if [ -e "$compact_install" ]; then
+    compact_displaced="$(mktemp -d "$HOME/Applications/Stats-Compact-before-restore.XXXXXX")"
+    mv "$compact_install" "$compact_displaced/Stats Compact.app"
+    printf 'Displaced installation saved to: %s\n' "$compact_displaced"
+  fi
+  ditto "$compact_saved" "$compact_install"
+  python3 check-local-app.py "$compact_install" && open "$compact_install"
+)
+```
+
+This preserves the build directory and user data. The installed app already contains its runtime frameworks; the separate `build/modules` directory is needed for incremental compilation, not for launching an installed bundle.
+
+For a build rollback, choose one exact `build/.previous-app-*` directory that contains **both** `Stats Compact.app` and `modules`. A first-build backup may be empty. Replace the placeholder below with the chosen directory name, keep Compact quit, and run from the repository root:
+
+```sh
+(
+  set -eu
+  compact_restore="build/.previous-app-REPLACE_WITH_EXACT_NAME"
+  test -d "$compact_restore/Stats Compact.app"
+  test -d "$compact_restore/modules"
+  python3 check-local-app.py "$compact_restore/Stats Compact.app"
+  compact_current="$(mktemp -d "build/.before-rollback.XXXXXX")"
+  if [ -e "build/Stats Compact.app" ]; then
+    mv "build/Stats Compact.app" "$compact_current/Stats Compact.app"
+  fi
+  if [ -e "build/modules" ]; then
+    mv "build/modules" "$compact_current/modules"
+  fi
+  ditto "$compact_restore/Stats Compact.app" "build/Stats Compact.app"
+  ditto "$compact_restore/modules" "build/modules"
+  python3 check-local-app.py "build/Stats Compact.app"
+)
+```
+
+Restore the app and modules from the **same** backup; do not mix builds. Repeat step 3 to deploy the restored bundle, including preflight on the actual installed path. This restores build artifacts only, so keep a separate user-data backup when needed.
+
+For development after a Clock-only change, `python3 build-local.py --only Clock Stats` is available when a matching app and modules already exist. First builds, deployment upgrades and any Kit source change should use the full command. `--only` does not inspect changed source files; explicitly including `Kit` in its arguments expands to a full rebuild.
+
+### Check the installation and handle failures
+
+- Confirm that preflight prints `Signature verified; Gatekeeper allows:` for `~/Applications/Stats Compact.app`, then launch through the guarded command.
+- Check that menu items remain independently movable and configurable, including CPU/GPU graphs, pie size and spacing. Check live data and the CPU popup after frequency samples arrive, section reordering and process-count changes; sections should remain separate.
+- Check that footer tool choices persist and open the selected apps. In the Clock calendar, check fast scrolling, momentum, abrupt reversal and Today. Quit and reopen through preflight to check that preferences and history persist. See [FORK.md](FORK.md) for the automated checks and their scope.
+- For build failures, read the relevant `build/*.log` file, including `sign.log`, `verify-signature.log` or `preflight.log`. Confirm the official resource dependency is exactly 3.0.22. If an earlier output was based on the wrong resource version, preserve its app and modules together before rebuilding from a clean output with the correct official dependency.
+- If macOS reports that the app is damaged or altered, or preflight refuses it, **stop and do not launch it**. Preserve the failing output and logs, and inspect or rebuild the complete bundle. Do not disable Gatekeeper or remove quarantine attributes to bypass the check. An interrupted installation may leave a partial target; use the saved complete bundle for recovery.
+
+## Upstream reference
+
+The remaining README is retained from **official Stats** for its features, FAQs, credits and license. Its installation, download, Homebrew, SSH, requirements, updater and support instructions describe the upstream application. Use the Compact deployment guide above for this fork.
 
 ---
 
-# Stats
+# Official Stats
 
 <a href="https://github.com/exelban/stats/releases"><p align="center"><img src="https://github.com/exelban/stats/raw/master/Stats/Supporting%20Files/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" width="120"></p></a>
 
@@ -15,18 +181,21 @@ See [FORK.md](FORK.md) for the full changes, local build instructions, validatio
 
 macOS system monitor in your menu bar
 
-## Installation
-### Manual
+## Official Stats installation
+
+These download, Homebrew and SSH instructions install **official Stats**, not Stats Compact.
+
+### Official download
 You can download the latest version [here](https://github.com/exelban/stats/releases/latest/download/Stats.dmg).
 This will download a file called `Stats.dmg`. Open it and move the app to the application folder.
 
-### Homebrew
+### Official Homebrew package
 To install it using Homebrew, open the Terminal app and type:
 ```bash
 brew install stats
 ```
 
-### Headless (SSH)
+### Official headless (SSH) installer
 To install Stats remotely over SSH and set it up as a remote monitoring agent, run:
 ```bash
 curl -fsSL https://cdn.mac-stats.com/install.sh | bash
@@ -34,7 +203,7 @@ curl -fsSL https://cdn.mac-stats.com/install.sh | bash
 The script installs the app, enables the Remote module and prints a URL with an authorization code - open it on any device and sign in to your System Stats account to authorize the machine. After that Stats starts streaming metrics to your account and is registered to launch automatically at login and restart if it stops.
 The Mac needs an active user session (a locked screen is fine) to run the app; on a fully headless machine Stats will start at the next login.
 
-### Uninstall
+### Official Stats uninstall
 Run the uninstall script bundled with the app (requires administrator privileges to remove the SMC helper):
 ```bash
 sh /Applications/Stats.app/Contents/Resources/Scripts/uninstall.sh
@@ -43,7 +212,7 @@ sh /Applications/Stats.app/Contents/Resources/Scripts/uninstall.sh
 ### Legacy version
 Legacy version for older systems could be found [here](https://mac-stats.com/downloads).
 
-## Requirements
+## Official Stats requirements
 Stats is supported on macOS 12 (Monterey) and newer.
 Beta versions of macOS are not supported - only stable releases.
 

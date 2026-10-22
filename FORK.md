@@ -23,22 +23,31 @@ triggered in the automated model checks.
 
 ## Build a separate local application
 
-Requirements: Apple Silicon, macOS 12 or later, Apple Command Line Tools, Python 3,
-and an official Stats 3.0.22 installation at `/Applications/Stats.app`.
+For the complete deployment, upgrade and rollback procedure, see the
+[English README](README.md#deployment) or [中文 README](README.zh-CN.md).
+
+Requirements for that workflow: Apple Silicon, macOS 14 or later, Apple Command
+Line Tools, Python 3, and an official Stats 3.0.22 installation at
+`/Applications/Stats.app`. The app targets macOS 12, but the execution preflight
+requires macOS 14 or later. Verify the installed official version yourself; the
+builder does not check its version number.
 
 ```sh
-python3 build-local.py
+python3 build-local.py &&
 python3 check-local-app.py "build/Stats Compact.app"
 ```
 
 Quit the running Compact app before rebuilding. The script compiles into a
 fresh temporary application and module directory, signs and checks the complete
 bundle, then replaces the output. The previous app and modules remain in a
-hidden `.previous-app-*` folder for rollback. A failed build or preflight leaves
-the existing output untouched.
+hidden `.previous-app-*` folder for rollback. Compilation, signing and preflight
+failures occur before output replacement. The final app and module moves are
+sequential, not an atomic transaction; inspect the outputs and backups before
+continuing if replacement is interrupted.
 
-The script compiles the main application and all monitoring frameworks. It uses
-the installed official app for unchanged resources, helpers and desktop widgets.
+The script compiles the main application and all monitoring frameworks. The
+first build uses the installed official app for unchanged resources, helpers and
+desktop widgets; later builds copy those from the existing Compact output.
 It creates an ad-hoc signed `build/Stats Compact.app` with bundle identifier
 `eu.exelban.Stats.Compact`; it does not replace the official installation.
 On macOS 14 or later, the build also verifies the signature and pre-scans the
@@ -52,13 +61,17 @@ execution.
 The ordinary upstream Xcode configuration retains upstream naming, so use this
 script when you need the separate Compact identity and preferences.
 
-The local app initializes display choices from Stats once, then uses its own
-preferences and data directory. Automatic updates are disabled for the custom
-build. Login credentials and login/update settings are not migrated.
+The local app initializes preferences for allowlisted monitoring modules from
+Stats once, then sets up the compact layout and uses its own preferences and
+data directory. Automatic updates default to Never for the custom build; keep
+that setting when deploying updates manually. Login credentials and login/update
+settings are not migrated.
 
 After a Clock-only change, `python3 build-local.py --only Clock Stats` can rebuild
-the affected targets. Kit changes always rebuild all dependent frameworks because
-the build does not enable Swift library evolution.
+the affected targets when a matching app and module directory already exist.
+Use a full build after Kit changes because the build does not enable Swift
+library evolution. Explicitly selecting Kit with `--only` also expands to a full
+build; the script does not detect source changes for other partial selections.
 
 ## Validation
 
