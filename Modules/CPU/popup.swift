@@ -155,6 +155,11 @@ internal class Popup: PopupWrapper {
         self.addPopupSection(self.initChart(), id: "history", title: "负载历史")
         self.addPopupSection(self.initDetails(), id: "details", title: "详细信息")
         self.addPopupSection(self.initAverage(), id: "average", title: "平均负载")
+        // Settings are built before the first frequency sample arrives. Keep a
+        // zero-height registered slot so the section is configurable immediately.
+        let frequency = NSView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: 0))
+        frequency.heightAnchor.constraint(equalToConstant: 0).isActive = true
+        self.addPopupSection(frequency, id: "frequency", title: "频率")
         self.addPopupSection(self.initProcesses(), id: "processes", title: "高占用进程")
         
         self.recalculateHeight()
@@ -182,18 +187,9 @@ internal class Popup: PopupWrapper {
     }
     
     private func recalculateHeight() {
-        var h: CGFloat = 0
-        self.arrangedSubviews.forEach { v in
-            if let v = v as? NSStackView {
-                h += v.arrangedSubviews.map({ $0.bounds.height + v.spacing }).reduce(0, +)
-            } else {
-                h += v.bounds.height
-            }
-        }
-        if self.frame.size.height != h {
-            self.setFrameSize(NSSize(width: self.frame.width, height: h))
-            self.sizeCallback?(self.frame.size)
-        }
+        let previousSize = self.frame.size
+        let size = self.applySectionLayout()
+        if previousSize != size { self.sizeCallback?(size) }
     }
     
     private func initDashboard() -> NSView {
@@ -367,12 +363,14 @@ internal class Popup: PopupWrapper {
     
     private func initProcesses() -> NSView {
         if self.numberOfProcesses == 0 {
-            let v = NSView()
+            let v = NSView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: 0))
+            v.heightAnchor.constraint(equalToConstant: 0).isActive = true
             self.processesView = v
             return v
         }
         
         let view: NSView = NSView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: self.processesHeight))
+        view.heightAnchor.constraint(equalToConstant: view.bounds.height).isActive = true
         let separator = separatorView(localizedString("Top processes"), origin: NSPoint(x: 0, y: self.processesHeight-Constants.Popup.separatorHeight), width: self.frame.width)
         let container: ProcessesView = ProcessesView(
             frame: NSRect(x: 0, y: 0, width: self.frame.width, height: separator.frame.origin.y),
@@ -457,8 +455,9 @@ internal class Popup: PopupWrapper {
     }
     
     private func renderFrequency(_ value: CPU_Frequency) {
-        if !self.frequencyCache.initialized {
-            self.insertArrangedSubview(self.initFrequency(), at: 4)
+        if self.coresFreqField == nil {
+            self.popupSection("frequency")?.removeFromSuperview()
+            self.addPopupSection(self.initFrequency(), id: "frequency", title: "频率", before: "processes")
             self.recalculateHeight()
         }
         if let view = self.frequencyCircle, (view as NSView).isHidden {

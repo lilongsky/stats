@@ -2,12 +2,15 @@
 """Measure the real Clock calendar without affecting the running application."""
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 root = Path(__file__).resolve().parents[1]
 source_root = root / 'stats-3.0.22' if (root / 'stats-3.0.22').exists() else root
 source = source_root / 'Modules/Clock'
 frameworks = root / 'build/Stats Compact.app/Contents/Frameworks'
+preflight = [sys.executable, str(root / 'check-local-app.py')]
+subprocess.run([*preflight, str(frameworks.parents[1])], check=True)
 with tempfile.TemporaryDirectory(prefix='stats-calendar-performance-') as temporary:
     directory = Path(temporary)
     combined = directory / 'popup-with-performance.swift'
@@ -25,4 +28,5 @@ with tempfile.TemporaryDirectory(prefix='stats-calendar-performance-') as tempor
         str(combined), '-o', str(executable)
     ]
     subprocess.run(command, check=True)
+    subprocess.run([*preflight, str(executable)], check=True)
     subprocess.run([str(executable)], check=True)

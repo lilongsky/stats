@@ -111,10 +111,16 @@ internal final class FooterToolsEditor: NSStackView {
 }
 
 public extension PopupWrapper {
-    func addPopupSection(_ view: NSView, id: String, title: String) {
+    func addPopupSection(_ view: NSView, id: String, title: String, before nextID: String? = nil) {
         view.identifier = NSUserInterfaceItemIdentifier("popup-section:" + id)
         self.popupSectionTitles[id] = title
-        if !self.popupSectionOrder.contains(id) { self.popupSectionOrder.append(id) }
+        if !self.popupSectionOrder.contains(id) {
+            if let nextID, let index = self.popupSectionOrder.firstIndex(of: nextID) {
+                self.popupSectionOrder.insert(id, at: index)
+            } else {
+                self.popupSectionOrder.append(id)
+            }
+        }
         self.popupSectionHeights[id] = view.frame.height
         self.addArrangedSubview(view)
     }

@@ -10,6 +10,8 @@ import json
 import plistlib
 import shutil
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -38,8 +40,11 @@ def main():
     if args.only is not None and 'Kit' in args.only:
         args.only = None
     BUILD.mkdir(exist_ok=True)
-    if not APP.exists():
-        shutil.copytree(BASE, APP, symlinks=True)
+    # Compile into fresh files. Rewriting a bundle that Gatekeeper has already
+    # assessed can leave it marked as altered even after signing it again.
+    staging = Path(tempfile.mkdtemp(prefix='.stats-build-', dir=BUILD))
+    app = staging / APP.name
+    shutil.copytree(APP if APP.exists() else BASE, app, symlinks=True)
     data = subprocess.check_output(['plutil', '-convert', 'json', '-o', '-', SOURCE / 'Stats.xcodeproj/project.pbxproj'])
     project = json.loads(data)
     objects = project['objects']
@@ -56,9 +61,12 @@ def main():
     walk(objects[project['rootObject']]['mainGroup'])
     targets = {o['name']: o for o in objects.values() if o.get('isa') == 'PBXNativeTarget'}
     sdk = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
-    module_dir = BUILD / 'modules'
-    module_dir.mkdir(exist_ok=True)
-    frameworks = APP / 'Contents/Frameworks'
+    module_dir = staging / 'modules'
+    if (BUILD / 'modules').exists():
+        shutil.copytree(BUILD / 'modules', module_dir)
+    else:
+        module_dir.mkdir()
+    frameworks = app / 'Contents/Frameworks'
     common = ['-sdk', sdk, '-target', 'arm64-apple-macos12.0', '-swift-version', '5',
               '-O', '-whole-module-optimization', '-module-cache-path', BUILD / 'module-cache',
               '-I', module_dir, '-F', frameworks,
@@ -99,7 +107,7 @@ def main():
         if name in ['CPU', 'GPU', 'Sensors']:
             extra += ['-lIOReport']
         if name == 'Stats':
-            output = APP / 'Contents/MacOS/Stats'
+            output = app / 'Contents/MacOS/Stats'
             extra += ['-parse-as-library']
         else:
             output = frameworks / f'{name}.framework/Versions/A' / name
@@ -109,7 +117,7 @@ def main():
         swift = [SOURCE / x for x in sources if x.suffix == '.swift']
         run(['xcrun', 'swiftc', '-module-name', name] + common + extra + swift + object_files + ['-o', output], name)
 
-    info_path = APP / 'Contents/Info.plist'
+    info_path = app / 'Contents/Info.plist'
     info = plistlib.loads(info_path.read_bytes())
     info.update(CFBundleIdentifier='eu.exelban.Stats.Compact', CFBundleName='Stats Compact',
                 CFBundleDisplayName='Stats Compact', TeamId='local.compact',
@@ -119,11 +127,21 @@ def main():
     for language in ['en', 'zh-Hans', 'zh-Hant']:
         source = SOURCE / 'Stats/Supporting Files' / (language + '.lproj/Localizable.strings')
         if source.exists():
-            destination = APP / 'Contents/Resources' / (language + '.lproj/Localizable.strings')
+            destination = app / 'Contents/Resources' / (language + '.lproj/Localizable.strings')
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
-    run(['codesign', '--force', '--deep', '--sign', '-', APP], 'sign')
-    run(['codesign', '--verify', '--deep', '--strict', APP], 'verify-signature')
+    run(['codesign', '--force', '--deep', '--sign', '-', app], 'sign')
+    run(['codesign', '--verify', '--deep', '--strict', app], 'verify-signature')
+    if Path('/usr/bin/gktool').is_file():
+        run([sys.executable, ROOT / 'check-local-app.py', app], 'preflight')
+    previous = Path(tempfile.mkdtemp(prefix='.previous-app-', dir=BUILD))
+    if APP.exists():
+        APP.rename(previous / APP.name)
+    if (BUILD / 'modules').exists():
+        (BUILD / 'modules').rename(previous / 'modules')
+    app.rename(APP)
+    module_dir.rename(BUILD / 'modules')
+    staging.rmdir()
     print(APP, flush=True)
 
 

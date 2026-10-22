@@ -28,12 +28,27 @@ and an official Stats 3.0.22 installation at `/Applications/Stats.app`.
 
 ```sh
 python3 build-local.py
+python3 check-local-app.py "build/Stats Compact.app"
 ```
+
+Quit the running Compact app before rebuilding. The script compiles into a
+fresh temporary application and module directory, signs and checks the complete
+bundle, then replaces the output. The previous app and modules remain in a
+hidden `.previous-app-*` folder for rollback. A failed build or preflight leaves
+the existing output untouched.
 
 The script compiles the main application and all monitoring frameworks. It uses
 the installed official app for unchanged resources, helpers and desktop widgets.
 It creates an ad-hoc signed `build/Stats Compact.app` with bundle identifier
 `eu.exelban.Stats.Compact`; it does not replace the official installation.
+On macOS 14 or later, the build also verifies the signature and pre-scans the
+complete app with Gatekeeper. Run `check-local-app.py` before each manual launch;
+it checks without launching the target and stops unless system policy allows
+it. All local test runners check their generated executables before running;
+the AppKit runners also check the framework app before compilation. The
+preflight-guarded runners require macOS 14 or later. Signature integrity alone does not prove that system policy permits
+execution.
+
 The ordinary upstream Xcode configuration retains upstream naming, so use this
 script when you need the separate Compact identity and preferences.
 
@@ -51,6 +66,7 @@ After building, run:
 
 ```sh
 python3 Tests/run-feature-models.py
+python3 Tests/run-cpu-popup-checks.py
 python3 Tests/run-calendar-checks.py
 python3 Tests/run-calendar-gestures.py
 python3 Tests/run-calendar-performance.py
@@ -61,6 +77,14 @@ checks. The gesture check replays inertial delta curves and abrupt reversals
 through the native clip view. It does not simulate a physical trackpad or measure
 AppKit's native momentum animator. See [PERFORMANCE.md](PERFORMANCE.md) for the
 measured scope and performance comparison.
+
+The CPU popup regression check compiles the real production popup in a hidden
+AppKit window with isolated preferences. It covers late frequency arrival,
+reopening, saved section order, hide/restore and process-count changes, checking
+content heights and section geometry. Frequency participates in customization
+and defaults to the position before top processes. Its zero-height placeholder
+also makes it configurable before the first telemetry sample. The check passes
+89 assertions, including process counts of 0, 3, 8, 10 and 20.
 
 ## Implementation provenance and contribution policy
 
