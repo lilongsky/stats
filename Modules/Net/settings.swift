@@ -57,7 +57,7 @@ You can use a combination of any of the variables. There is only one limitation:
 </ul>
 """
 
-internal class Settings: NSStackView, Settings_v, NSTextFieldDelegate {
+internal class Settings: SettingsContainerView, Settings_v, NSTextFieldDelegate {
     private var numberOfProcesses: Int = 8
     private var readerType: String = "interface"
     private var usageReset: String = AppUpdateInterval.never.rawValue
@@ -119,7 +119,7 @@ internal class Settings: NSStackView, Settings_v, NSTextFieldDelegate {
         
         super.init(frame: NSRect.zero)
         self.orientation = .vertical
-        self.spacing = Constants.Settings.margin
+        self.spacing = 20
         
         for interface in SCNetworkInterfaceCopyAll() as NSArray {
             if  let bsdName = SCNetworkInterfaceGetBSDName(interface as! SCNetworkInterface),
@@ -134,7 +134,10 @@ internal class Settings: NSStackView, Settings_v, NSTextFieldDelegate {
     }
     
     public func load(widgets: [widget_t]) {
-        self.subviews.forEach{ $0.removeFromSuperview() }
+        self.arrangedSubviews.forEach {
+            self.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
         
         self.addArrangedSubview(PreferencesSection([
             PreferencesRow(localizedString("Number of top processes"), component: selectView(

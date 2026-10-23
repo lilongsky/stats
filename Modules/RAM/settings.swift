@@ -42,7 +42,7 @@ You can use a combination of any of the variables.
 </ul>
 """
 
-internal class Settings: NSStackView, Settings_v, NSTextFieldDelegate {
+internal class Settings: SettingsContainerView, Settings_v, NSTextFieldDelegate {
     private var updateIntervalValue: Int = 1
     private var updateTopIntervalValue: Int = 1
     private var numberOfProcesses: Int = 8
@@ -74,7 +74,7 @@ internal class Settings: NSStackView, Settings_v, NSTextFieldDelegate {
         
         self.orientation = .vertical
         self.distribution = .gravityAreas
-        self.spacing = Constants.Settings.margin
+        self.spacing = 20
     }
     
     required init?(coder: NSCoder) {
@@ -82,7 +82,10 @@ internal class Settings: NSStackView, Settings_v, NSTextFieldDelegate {
     }
     
     public func load(widgets: [widget_t]) {
-        self.subviews.forEach{ $0.removeFromSuperview() }
+        self.arrangedSubviews.forEach {
+            self.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
         
         self.addArrangedSubview(PreferencesSection([
             PreferencesRow(localizedString("Update interval"), component: selectView(

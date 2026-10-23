@@ -12,7 +12,7 @@
 import Cocoa
 import Kit
 
-internal class Settings: NSStackView, Settings_v {
+internal class Settings: SettingsContainerView, Settings_v {
     private let title: String
     
     public var toggleCallback: (() -> Void) = {}
@@ -36,7 +36,7 @@ internal class Settings: NSStackView, Settings_v {
         super.init(frame: .zero)
         
         self.orientation = .vertical
-        self.spacing = Constants.Settings.margin
+        self.spacing = 20
         
         self.machinesList.toggleCallback = { [weak self] in self?.toggleCallback() }
         self.hostsList.toggleCallback = { [weak self] in self?.toggleCallback() }

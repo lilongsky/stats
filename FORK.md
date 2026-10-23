@@ -13,7 +13,7 @@ and author notices. It is not an official Stats release.
 - Local SQLite history for four time ranges, mean/peak display and CSV export.
 - Sustained notification thresholds and optional per-fan temperature curves.
 - A continuous Clock calendar with native year/month selectors, a Today button, bounded reusable date views and one hover target.
-- A labeled Settings sidebar entry, aligned settings groups and contextual native controls for widget sizing and popup shortcuts.
+- A native source-list settings sidebar, a More menu, native tabbed panes and equal-width forms, with contextual widget sizing, popup shortcuts and hardware-based fan preferences.
 
 The menu padding implementation probes private AppKit selectors at runtime and
 falls back to the system behavior when unavailable. It needs revalidation after
@@ -36,11 +36,33 @@ popup, and used Today to restore the current month.
 
 ## Settings interface
 
-The Settings page is available in the sidebar. A compact app identity row leaves
-more room for General, Menu bar, Advanced menu bar and Settings Data groups.
-Related controls share aligned rows; explanatory captions wrap to the available
-width. Each widget has a small labeled header and its own size and spacing
-controls. Popup sections use named rows with visibility switches on the right.
+The window uses an AppKit source-list sidebar with native selection and keyboard
+navigation. A compact More menu retains support, report, pause/resume and quit
+actions. Module panes use a native tab view; the widget-style selector
+appears only in Widgets. The Enable module switch is in the window body, while
+the toolbar uses explicit Settings / Preview labels. Related options form one
+column of equal-width groups with wrapping explanations, semantic system colors
+and standard controls. The default window is larger, while valid saved window
+frames are preserved. The settings window supports Command-comma for general
+settings, Command-W to close the window and Command-Q to quit the app.
+
+The design references Apple's [Settings](https://developer.apple.com/design/human-interface-guidelines/settings),
+[Layout](https://developer.apple.com/design/human-interface-guidelines/layout),
+[Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars),
+[Tab views](https://developer.apple.com/design/human-interface-guidelines/tab-views)
+and [Toggles](https://developer.apple.com/design/human-interface-guidelines/toggles)
+guidance. Native tabs follow the macOS pane-switching recommendation in
+[Segmented controls](https://developer.apple.com/design/human-interface-guidelines/segmented-controls).
+The 24-point content margins and 20-point group spacing are local
+design choices, not numerical requirements imposed by Apple. The window also
+contains a monitoring Dashboard, so manual resizing remains available.
+
+The form container establishes card widths explicitly rather than inferring
+its layout from an existing superview. Sensors builds static cards before being
+attached to a window, then adds or replaces sensor groups when a reader list
+arrives. Both paths use the same form width. Fan preferences depend on actual
+physical Fan records in that list, rather than a Mac model or CPU architecture;
+when none are reported, the form shows an explanatory empty state.
 
 Each module has four independent application shortcut slots. Native macOS
 pop-up menus display application names and icons, support hiding a slot or
@@ -49,25 +71,10 @@ and spacing have a separate reset scoped to the current widget. When compact
 mode or its global default changes, the displayed switch and numeric defaults
 update together; explicit custom dimensions and spacing are retained.
 
-These changes follow the useful organization seen in iStat Menus: separate
-global and module settings, keep controls with the object they affect, and make
-reset scope clear. Controls are implemented in AppKit; proprietary UI resources
-are not reused. Offscreen checks of the reusable settings views and popup
-editors pass 71 assertions in each of Chinese and English, at 540- and 680-point
-widths in light and dark appearances. They cover alignment, wrapping, complete
-first/last table rows, section actions, tool choices and size/default/reset
-synchronization. The renderer also exposed and verified a fix for the last
-section row being clipped by automatic table insets. These renders are isolated
-views. The final Chinese light-appearance application window was also checked
-live: General and CPU module cards fill the pane, section actions and switches
-remain visible, and all four application shortcut rows align within the form.
-
-A subsequent full-window review found that a hidden combined-item preview
-constrained the General page width, while module tab contents and older module
-cards did not fill their viewport. The General scroll view now pins to its
-container; the fixed-width preview has a flexible wrapper, and module panes,
-tabs and cards follow the available width. The ordinary module-stack regression
-covers two cards with different content lengths without manual card widths.
+The organization also incorporates useful ideas observed in iStat Menus:
+separate global and module settings, keep controls with the object they affect,
+and make reset scope clear. The implementation uses Stats source and AppKit;
+proprietary UI resources are not reused.
 
 ## Build a separate local application
 
@@ -141,26 +148,48 @@ through the native clip view. It does not simulate a physical trackpad or measur
 AppKit's native momentum animator. See [PERFORMANCE.md](PERFORMANCE.md) for the
 measured scope and performance comparison.
 
+The settings runner checks the reusable production forms and popup editors
+with isolated preferences, then writes offscreen light/dark PNGs. It covers
+wrapping, control alignment, complete table rows, section visibility/order,
+shortcut choices and widget size/default/reset synchronization.
+
+It also compiles the actual internal Sensors module settings, popup settings,
+notification settings and production sensor value models into a temporary app
+with its own preference and notification identity. That regression constructs the real form
+before a window exists, supplies reader lists both before and after mounting,
+and exercises repeated refreshes, empty lists, widget changes and remounting.
+It checks form edges, nonoverlapping cards, visible labels and native control
+alignment at 420-, 540- and 680-point form widths in light and dark appearances.
+Popup and notification cards also exercise their real construction and refresh
+paths, including shortcut controls and the alert-duration group.
+Sensor and Fan records are fixtures: the helper does not start telemetry
+readers, load the application delegate, show a production window or command a
+physical fan. These checks therefore establish layout and state behavior;
+installed-window appearance and hardware behavior need separate live checks.
+
+The redesigned settings checks pass 1,607 assertions in Chinese and 1,607 in
+English. Each language exports 40 isolated previews. The checks include the
+shortcut recorder button inside its composite control and a compact duration
+editor, in addition to card and row alignment. CPU popup checks pass 96
+assertions and calendar checks pass 320 against the same rebuilt Kit.
+
 The CPU popup regression check compiles the real production popup in a hidden
 AppKit window with isolated preferences. It covers late frequency arrival,
 reopening, saved section order, hide/restore and process-count changes, checking
 content heights and section geometry. Frequency participates in customization
 and defaults to the position before top processes. Its zero-height placeholder
-also makes it configurable before the first telemetry sample. The check passes
-96 assertions, including process counts of 0, 3, 8, 10 and 20. The original 89
-layout checks are retained, with seven explicit async-completion checks. The
-helper waits for callback completion instead of assuming a 20 ms run-loop delay.
+also makes it configurable before the first telemetry sample. The helper waits
+for callback completion instead of assuming a fixed run-loop delay.
 
-After the shared settings layout changes, the full build, strict signature
-verification and Gatekeeper preflight passed. The settings checks above, 96 CPU
-popup checks and 320 calendar checks passed against that final build. The
-settings runner writes offscreen PNGs under the build directory by default;
-it uses isolated preferences and never opens the production settings window.
-
-The final deployed app was also launched from a second build directory while
-the existing copy was running: it returned successfully without initializing a
-second instance. Native menu-bar inspection confirmed one Compact process with
-seven independent items.
+A live Chinese light-appearance review of the deployed bundle checked General,
+Sensors module, popup and notification settings, and CPU widget settings. Cards
+share their form edges; the shortcut recorder and compact duration editor align
+on the right. Command-comma opens general settings, Command-W closes the window
+while monitoring continues, and Command-Q exits. The settings/preview button
+retains the correct state after closing and reopening the window. The running
+app has one Compact process and seven independent menu items. These live checks
+do not establish the appearance of every pane on every macOS release; use the
+README checklist on the target Mac.
 
 ## Implementation provenance and contribution policy
 

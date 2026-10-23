@@ -24,6 +24,7 @@ class Notifications: NotificationsWrapper {
     
     public init(_ module: ModuleType) {
         super.init(module)
+        self.spacing = 20
         for p in self.temperatureList {
             if let v = Double(p) {
                 self.temperatureLevels.append(KeyValue_t(key: p, value: temperature(v)))
@@ -41,7 +42,10 @@ class Notifications: NotificationsWrapper {
         if !self.unknownSensorsState {
             values = values.filter({ $0.group != .unknown })
         }
-        self.subviews.forEach({ $0.removeFromSuperview() })
+        self.arrangedSubviews.forEach {
+            self.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
         self.addArrangedSubview(self.durationSettings())
         self.initIDs(values.map{$0.key})
         

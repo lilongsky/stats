@@ -12,7 +12,7 @@
 import Cocoa
 import UserNotifications
 
-open class NotificationsWrapper: NSStackView {
+open class NotificationsWrapper: SettingsContainerView {
     public let module: String
     
     private var ids: [String: Bool?] = [:]
@@ -27,7 +27,7 @@ open class NotificationsWrapper: NSStackView {
         self.orientation = .vertical
         self.distribution = .gravityAreas
         self.translatesAutoresizingMaskIntoConstraints = false
-        self.spacing = Constants.Settings.margin
+        self.spacing = 20
         self.addArrangedSubview(self.durationSettings())
     }
     

@@ -8,7 +8,7 @@ private struct SettingsCheckError: LocalizedError {
     var errorDescription: String? { self.message }
 }
 
-private final class Checks {
+final class Checks {
     var count = 0
     var failures = 0
 
@@ -383,19 +383,16 @@ private func verifyActions(_ fixture: SettingsFixture, _ checks: Checks) throws 
                  "restoring a section restores the popup height")
 }
 
-private func verifyOrdinaryModuleSections(_ checks: Checks) {
+private func verifyExplicitModuleSections(_ checks: Checks) {
     let host = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 300))
     let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.contentView = host
     defer { window.close() }
-    // Match CPU.Settings: an ordinary vertical gravityAreas stack, default
-    // alignment and zero inner insets; its outer settings host supplies margins.
-    let stack = NSStackView()
-    stack.orientation = .vertical
-    stack.distribution = .gravityAreas
-    stack.spacing = Constants.Settings.margin
-    stack.translatesAutoresizingMaskIntoConstraints = false
+    // Module settings explicitly own the full-width form contract. This checks
+    // the reusable container; the separate Sensors probe compiles and tests a
+    // real module, including cards created before it enters a window.
+    let stack = SettingsContainerView()
     host.addSubview(stack)
     NSLayoutConstraint.activate([
         stack.leadingAnchor.constraint(equalTo: host.leadingAnchor),
@@ -417,7 +414,7 @@ private func verifyOrdinaryModuleSections(_ checks: Checks) {
     let cardFrames = cards.map { $0.convert($0.bounds, to: stack) }
     checks.check(cardFrames.allSatisfy {
         abs($0.minX - usable.minX) < 0.6 && abs($0.maxX - usable.maxX) < 0.6 && abs($0.width - 520) < 0.6
-    }, "ordinary 520pt module stacks automatically give differently sized settings cards matching left and right edges")
+    }, "explicit 520pt module containers give differently sized settings cards matching left and right edges")
     let trailingEdges = choices.map { alignmentFrame($0, in: stack).maxX }
     checks.check(rows.indices.allSatisfy { index in
         let row = rows[index], control = choices[index], card = cards[index < 2 ? 0 : 1]
@@ -429,7 +426,7 @@ private func verifyOrdinaryModuleSections(_ checks: Checks) {
             labels.allSatisfy { visible($0) && !$0.bounds.isEmpty &&
                 card.bounds.insetBy(dx: -0.6, dy: -0.6).contains($0.convert($0.bounds, to: card)) } &&
             !overlaps(text, control.convert(control.bounds, to: row)) && abs(trailingEdges[index] - trailingEdges[0]) < 0.6
-    }, "ordinary module cards keep their real labels and native selectors visible, aligned and free of overlap")
+    }, "explicit module cards keep their real labels and native selectors visible, aligned and free of overlap")
 }
 
 private func verifyInsertedStackWidth(_ checks: Checks) {
@@ -587,9 +584,11 @@ private struct SettingsLayoutChecks {
 
     private static func run() throws {
         setbuf(stdout, nil)
-        let domain = ProcessInfo.processInfo.processName
-        guard Bundle.main.bundleIdentifier == nil, domain.hasPrefix("stats-settings-checks-") else {
-            throw SettingsCheckError(message: "Settings checks require an isolated uniquely named executable")
+        let process = ProcessInfo.processInfo.processName
+        let domain = Bundle.main.bundleIdentifier ?? process
+        guard process.hasPrefix("stats-settings-checks-"),
+              Bundle.main.bundleIdentifier == nil || domain.hasPrefix("local.stats.settings-checks.") else {
+            throw SettingsCheckError(message: "Settings checks require an isolated uniquely named helper")
         }
         defer { UserDefaults.standard.removePersistentDomain(forName: domain) }
         guard let index = CommandLine.arguments.firstIndex(of: "--output-dir"),
@@ -617,7 +616,7 @@ private struct SettingsLayoutChecks {
                     verifySectionAPIs(fixture, checks)
                     if width == 540 {
                         try verifyActions(fixture, checks)
-                        verifyOrdinaryModuleSections(checks)
+                        verifyExplicitModuleSections(checks)
                         verifyInsertedStackWidth(checks)
                         try verifyWidgetSizingInputs(checks)
                     }
@@ -630,6 +629,11 @@ private struct SettingsLayoutChecks {
                                     baseline: baseline, checks: checks)
                 }
             }
+#if SETTINGS_REAL_SENSORS
+            if !baseline {
+                try SensorsSettingsChecks.run(checks: checks, output: output)
+            }
+#endif
         } catch {
             checks.check(false, error.localizedDescription)
         }

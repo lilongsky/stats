@@ -1100,13 +1100,22 @@ public func process(path: String, arguments: [String], environment: [String: Str
     return output
 }
 
-public class SettingsContainerView: NSStackView {
+open class SettingsContainerView: NSStackView {
     public init() {
         super.init(frame: NSRect.zero)
+        self.configureForm()
+    }
+
+    public override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        self.configureForm()
+    }
+
+    private func configureForm() {
         self.translatesAutoresizingMaskIntoConstraints = false
         self.orientation = .vertical
         self.alignment = .leading
-        self.spacing = 16
+        self.spacing = 20
         self.setHuggingPriority(.defaultLow, for: .horizontal)
     }
 
@@ -1114,8 +1123,13 @@ public class SettingsContainerView: NSStackView {
         super.addArrangedSubview(view)
         fillSettingsWidth(view, in: self)
     }
+
+    public override func insertArrangedSubview(_ view: NSView, at index: Int) {
+        super.insertArrangedSubview(view, at: index)
+        fillSettingsWidth(view, in: self)
+    }
     
-    required init?(coder: NSCoder) {
+    required public init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 }
@@ -1708,20 +1722,13 @@ public class PreferencesSection: NSStackView {
     private let container: NSStackView = NSStackView()
     private var subtitleField: NSTextField?
 
-    public override func viewDidMoveToSuperview() {
-        super.viewDidMoveToSuperview()
-        if let stack = self.superview as? NSStackView {
-            fillSettingsWidth(self, in: stack)
-        }
-    }
-
     public init(title: String = "", subtitle: String = "", id: String? = nil, _ components: [NSView] = []) {
         super.init(frame: .zero)
         
         self.orientation = .vertical
         self.alignment = .leading
         self.setHuggingPriority(.defaultLow, for: .horizontal)
-        self.spacing = 6
+        self.spacing = 8
         if let id {
             self.identifier = NSUserInterfaceItemIdentifier(id)
         }
@@ -1734,10 +1741,9 @@ public class PreferencesSection: NSStackView {
         self.container.alignment = .leading
         self.container.setHuggingPriority(.defaultLow, for: .horizontal)
         self.container.wantsLayer = true
-        self.container.layer?.cornerRadius = 10
-        self.container.layer?.borderWidth = 0.5
+        self.container.layer?.cornerRadius = 8
         self.container.edgeInsets = NSEdgeInsets(
-            top: 4, left: 12, bottom: 4, right: 12
+            top: 2, left: 12, bottom: 2, right: 12
         )
         self.container.spacing = 0
         self.addArrangedSubview(self.container)
@@ -1755,7 +1761,6 @@ public class PreferencesSection: NSStackView {
     
     public override func updateLayer() {
         self.container.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        self.container.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.35).cgColor
     }
 
     public override func viewDidChangeEffectiveAppearance() {
@@ -1794,7 +1799,7 @@ public class PreferencesSection: NSStackView {
     }
     
     public func add(_ view: NSView) {
-        if !self.container.subviews.isEmpty {
+        if !self.container.arrangedSubviews.isEmpty {
             let separator = PreferencesSeparator()
             self.container.addArrangedSubview(separator)
             fillSettingsWidth(separator, in: self.container)
@@ -1804,47 +1809,49 @@ public class PreferencesSection: NSStackView {
     }
     
     public func delete(_ id: String) {
-        let views = self.container.subviews
+        let views = self.container.arrangedSubviews
         views.enumerated().forEach { (i, v) in
             guard v.identifier?.rawValue == id else { return }
-            if self.container.subviews.indices.contains(i-1) {
-                let prev = self.container.subviews[i-1]
+            if views.indices.contains(i-1) {
+                let prev = views[i-1]
                 if prev.identifier?.rawValue == "PreferencesSeparator" {
+                    self.container.removeArrangedSubview(prev)
                     prev.removeFromSuperview()
                 }
             }
+            self.container.removeArrangedSubview(v)
             v.removeFromSuperview()
         }
     }
     
     public func contains(_ id: String) -> Bool {
-        self.container.subviews.contains(where: { $0.identifier?.rawValue == id })
+        self.container.arrangedSubviews.contains(where: { $0.identifier?.rawValue == id })
     }
     
     public func setRowVisibility(_ at: Int, newState: Bool) {
         if at == 0 {
-            self.container.subviews[0].isHidden = !newState
-            if self.container.subviews.count > 1 {
-                self.container.subviews[1].isHidden = !newState
+            self.container.arrangedSubviews[0].isHidden = !newState
+            if self.container.arrangedSubviews.count > 1 {
+                self.container.arrangedSubviews[1].isHidden = !newState
             }
             return
         }
-        for i in self.container.subviews.indices where i/2 == at && Double(i).remainder(dividingBy: 2) == 0 {
-            self.container.subviews[i-1].isHidden = !newState
-            self.container.subviews[i].isHidden = !newState
+        for i in self.container.arrangedSubviews.indices where i/2 == at && i % 2 == 0 {
+            self.container.arrangedSubviews[i-1].isHidden = !newState
+            self.container.arrangedSubviews[i].isHidden = !newState
         }
     }
     public func setRowVisibility(_ id: String, newState: Bool) {
-        guard let at = self.container.subviews.firstIndex(where: { $0.identifier?.rawValue == id }) else { return }
+        guard let at = self.container.arrangedSubviews.firstIndex(where: { $0.identifier?.rawValue == id }) else { return }
         self.setRowVisibility(at/2, newState: newState)
     }
     public func setRowVisibility(_ row: PreferencesRow, newState: Bool) {
-        guard let at = self.container.subviews.firstIndex(where: { $0 == row }) else { return }
+        guard let at = self.container.arrangedSubviews.firstIndex(where: { $0 == row }) else { return }
         self.setRowVisibility(at/2, newState: newState)
     }
     
     public func findRow(_ id: String) -> PreferencesRow? {
-        let rows: [PreferencesRow] = self.container.subviews.filter({ $0 is PreferencesRow }).compactMap({ $0 as? PreferencesRow })
+        let rows = self.container.arrangedSubviews.compactMap { $0 as? PreferencesRow }
         return rows.first(where: { $0.identifier?.rawValue == id })
     }
 }
@@ -1854,7 +1861,7 @@ private class PreferencesSeparator: NSView {
         super.init(frame: .zero)
         self.wantsLayer = true
         self.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.35).cgColor
-        self.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        self.heightAnchor.constraint(equalToConstant: 0.5).isActive = true
         self.identifier = NSUserInterfaceItemIdentifier("PreferencesSeparator")
     }
     
@@ -1885,7 +1892,7 @@ public class PreferencesRow: NSStackView {
         self.alignment = .centerY
         self.edgeInsets = NSEdgeInsets(top: 7, left: 0, bottom: 7, right: 0)
         self.spacing = 12
-        self.heightAnchor.constraint(greaterThanOrEqualToConstant: 34).isActive = true
+        self.heightAnchor.constraint(greaterThanOrEqualToConstant: 36).isActive = true
         if let id {
             self.identifier = NSUserInterfaceItemIdentifier(id)
         }
@@ -1920,11 +1927,17 @@ public class PreferencesRow: NSStackView {
     }
 
     private func configureComponent(_ view: NSView) {
+        if let toggle = view as? NSSwitch {
+            toggle.controlSize = .mini
+        }
         if self.fillsComponent {
             self.componentWidth = view.widthAnchor.constraint(equalTo: self.widthAnchor)
             self.componentWidth?.isActive = true
         } else {
             view.setContentHuggingPriority(.required, for: .horizontal)
+            if let stack = view as? NSStackView {
+                stack.setHuggingPriority(.required, for: .horizontal)
+            }
             view.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
             if let choice = view as? NSPopUpButton {
                 choice.controlSize = .small
@@ -2029,6 +2042,11 @@ public class StepperInput: NSStackView, NSTextFieldDelegate, PreferencesSwitchWi
         self.valueView.stringValue = "\(value)"
         self.valueView.translatesAutoresizingMaskIntoConstraints = false
         self.valueView.widthAnchor.constraint(greaterThanOrEqualToConstant: 35).isActive = true
+        let digits = [value, range.lowerBound, range.upperBound].map { String($0).count }.max() ?? 1
+        let sample = String(repeating: "8", count: digits) as NSString
+        let editWidth = max(35, ceil(sample.size(withAttributes: [.font: self.valueView.font!]).width + 12))
+        self.valueView.widthAnchor.constraint(lessThanOrEqualToConstant: editWidth).isActive = true
+        self.valueView.setContentHuggingPriority(.required, for: .horizontal)
         
         self.stepperView.font = NSFont.systemFont(ofSize: 12, weight: .regular)
         self.stepperView.doubleValue = Double(value)/100

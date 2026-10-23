@@ -85,25 +85,25 @@ internal final class FanCurveController: NSObject {
     @objc private func didWake() { self.sleeping = false; self.lastSample = 0 }
 }
 
-internal final class FanCurveSettingsView: NSStackView {
+internal final class FanCurveSettingsView: SettingsContainerView {
     private let fans: [Fan]
     private let sensors: [Sensor_p]
     init(sensors: [Sensor_p]) {
         self.fans = sensors.compactMap { $0 as? Fan }.filter { $0.maxSpeed > $0.minSpeed }
         self.sensors = sensors.filter { $0.type == .temperature }
-        super.init(frame: .zero)
-        self.orientation = .vertical
-        self.spacing = Constants.Settings.margin
+        super.init()
+        self.spacing = 20
         self.identifier = NSUserInterfaceItemIdentifier("fan-curve-settings")
         self.reload()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     private func reload() {
-        self.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        self.arrangedSubviews.forEach {
+            self.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
         guard !self.fans.isEmpty else {
-            self.addArrangedSubview(PreferencesSection(title: "温度风扇曲线", [
-                localFeatureLabel("当前机型没有可控制风扇。")
-            ]))
+            self.addArrangedSubview(localFeatureLabel("当前机型没有可控制风扇。"))
             return
         }
         for fan in self.fans {

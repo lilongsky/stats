@@ -6,7 +6,9 @@ Stats Compact 是基于 [exelban/stats](https://github.com/exelban/stats) v3.0.2
 
 在时钟日历标题中，点击年份或月份即可打开对应的 macOS 原生选择菜单。选年保留月份，选月保留年份。年份列表包含当前浏览年份前后各 50 年，每次打开时重新居中；滚动、月份箭头和“今天”会同步两个选择器。
 
-设置现在有具名的侧栏入口，通用、菜单栏、高级选项和设置数据分组统一对齐。每个指标的弹窗快捷工具提供四个独立槽位，使用显示应用名称与图标的 macOS 原生菜单。各小组件的尺寸、间距输入会同步紧凑模式的默认值，并保留自定义数值；恢复按钮只作用于当前小组件或当前指标的工具。验证范围见 [FORK.md](FORK.md#settings-interface)。
+设置采用原生来源列表侧栏、收纳低频操作的“更多”菜单，以及用于切换模块设置页的原生页签。小组件样式选择器只出现在“小组件”页，“启用此模块”开关放在窗口内容内。相关设置使用等宽的单列表单分组。Command-逗号打开通用设置，Command-W 关闭窗口，Command-Q 退出应用。传感器设置在构造完成后再挂载到窗口时也能保持宽度；风扇选项按读取器实际检测到的物理风扇显示，未检测到时提供说明。
+
+每个指标的弹窗快捷工具提供四个独立槽位，使用显示应用名称与图标的 macOS 原生菜单。各小组件的尺寸、间距输入会同步紧凑模式的默认值，并保留自定义数值；恢复按钮只作用于当前小组件或当前指标的工具。此次重新设计参考 Apple 官方的[设置](https://developer.apple.com/design/human-interface-guidelines/settings)、[布局](https://developer.apple.com/design/human-interface-guidelines/layout)、[侧栏](https://developer.apple.com/design/human-interface-guidelines/sidebars)、[页签视图](https://developer.apple.com/design/human-interface-guidelines/tab-views)和[切换控件](https://developer.apple.com/design/human-interface-guidelines/toggles)指引。模块切页采用原生页签，遵循[分段控件](https://developer.apple.com/design/human-interface-guidelines/segmented-controls)指引中 macOS 段的建议。24 点内容边距和 20 点组间距是本分支的设计选择，并非 Apple 规定的数值。实现及验证范围见 [FORK.md](FORK.md#settings-interface)。
 
 再次打开另一份 Compact 时，会先检查并复用较早注册的 Compact 实例，再决定是否初始化读取器和设置。切换到新构建前请先退出当前 Compact；官方 Stats 仍使用独立的应用标识。
 
@@ -189,6 +191,7 @@ Compact 使用独立的偏好与数据路径：
 
 - 菜单栏各模块是可独立配置的项目，CPU、GPU 的图表设置分别生效。
 - CPU 弹窗在频率数据出现、反复打开、调整进程数量或区块顺序后没有重叠或裁切。
+- 打开通用和传感器设置，切换模块设置页并用键盘导航侧栏。各组应填满同一表单宽度，文字与控件互不重叠；小组件样式选择器只在“小组件”页出现，风扇选项符合实际检测到的硬件。
 - 弹窗底栏工具槽能保存配置，点击后打开所配置的应用。
 - 日历能快速滚动并继续惯性滑动；惯性未结束时反向滚动，日期连续，固定的星期栏与底栏位置正常。
 - 日历的“今天”按钮能回到当前日期，今天标记正常；原有偏好和历史数据仍可读取。

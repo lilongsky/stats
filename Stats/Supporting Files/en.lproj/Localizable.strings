@@ -645,3 +645,15 @@
 "流量详情" = "Traffic Details";
 "网络接口" = "Network Interface";
 "IP 地址" = "IP Addresses";
+
+/* Native settings redesign */
+"More" = "More";
+"Modules" = "Modules";
+"Preview" = "Preview";
+"Enable module" = "Enable module";
+"Fan Controls" = "Fan Controls";
+"Sensor Sources" = "Sensor Sources";
+"No controllable fans detected" = "No controllable fans detected";
+"Choose which sensors appear in the menu bar." = "Choose which sensors appear in the menu bar.";
+"Menu bar widgets" = "Menu bar widgets";
+"Click to show or hide a widget. Drag to change its order." = "Click to show or hide a widget. Drag to change its order.";

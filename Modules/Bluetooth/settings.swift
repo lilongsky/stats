@@ -12,7 +12,7 @@
 import Cocoa
 import Kit
 
-internal class Settings: NSStackView, Settings_v {
+internal class Settings: SettingsContainerView, Settings_v {
     public var callback: (() -> Void) = {}
     
     private var list: [String: Bool] = [:]
@@ -20,12 +20,12 @@ internal class Settings: NSStackView, Settings_v {
     private let emptyView: EmptyView = EmptyView(msg: localizedString("No Bluetooth devices are available"))
     private var section: PreferencesSection = PreferencesSection()
     
-    public init() {
+    public override init() {
         super.init(frame: NSRect(x: 0, y: 0, width: 0, height: 0))
         
         self.orientation = .vertical
         self.distribution = .gravityAreas
-        self.spacing = Constants.Settings.margin
+        self.spacing = 20
         
         self.addArrangedSubview(self.emptyView)
         self.addArrangedSubview(self.section)

@@ -32,7 +32,7 @@ You can use a combination of any of the variables.
 </ul>
 """
 
-internal class Settings: NSStackView, Settings_v {
+internal class Settings: SettingsContainerView, Settings_v {
     private var updateIntervalValue: Int = 1
     private var selectedGPU: String
     private var showTypeValue: Bool = false
@@ -56,7 +56,7 @@ internal class Settings: NSStackView, Settings_v {
         self.wantsLayer = true
         self.orientation = .vertical
         self.distribution = .gravityAreas
-        self.spacing = Constants.Settings.margin
+        self.spacing = 20
     }
     
     required init?(coder: NSCoder) {
@@ -64,7 +64,10 @@ internal class Settings: NSStackView, Settings_v {
     }
     
     public func load(widgets: [widget_t]) {
-        self.subviews.forEach{ $0.removeFromSuperview() }
+        self.arrangedSubviews.forEach {
+            self.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
         
         self.addArrangedSubview(PreferencesSection([
             PreferencesRow(localizedString("Update interval"), component: selectView(

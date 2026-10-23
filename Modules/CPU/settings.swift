@@ -12,7 +12,7 @@
 import Cocoa
 import Kit
 
-internal class Settings: NSStackView, Settings_v {
+internal class Settings: SettingsContainerView, Settings_v {
     private var usagePerCoreState: Bool = false
     private var hyperthreadState: Bool = false
     private var splitValueState: Bool = false
@@ -53,7 +53,7 @@ internal class Settings: NSStackView, Settings_v {
         self.orientation = .vertical
         self.distribution = .gravityAreas
         self.translatesAutoresizingMaskIntoConstraints = false
-        self.spacing = Constants.Settings.margin
+        self.spacing = 20
     }
     
     required init?(coder: NSCoder) {
@@ -61,7 +61,10 @@ internal class Settings: NSStackView, Settings_v {
     }
     
     public func load(widgets: [widget_t]) {
-        self.subviews.forEach{ $0.removeFromSuperview() }
+        self.arrangedSubviews.forEach {
+            self.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
         
         self.addArrangedSubview(PreferencesSection([
             PreferencesRow(localizedString("Update interval"), component: selectView(

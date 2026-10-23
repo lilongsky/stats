@@ -18,7 +18,7 @@ let tzColumnID = NSUserInterfaceItemIdentifier(rawValue: "tz")
 let calendarColumnID = NSUserInterfaceItemIdentifier(rawValue: "calendar")
 let statusColumnID = NSUserInterfaceItemIdentifier(rawValue: "status")
 
-internal class Settings: NSStackView, Settings_v, NSTableViewDelegate, NSTableViewDataSource, NSTextFieldDelegate {
+internal class Settings: SettingsContainerView, Settings_v, NSTableViewDelegate, NSTableViewDataSource, NSTextFieldDelegate {
     public var callback: (() -> Void) = {}
     
     private var cachedList: [Clock_t] = []

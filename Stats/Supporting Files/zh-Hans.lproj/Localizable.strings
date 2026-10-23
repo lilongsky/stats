@@ -645,3 +645,15 @@
 "流量详情" = "流量详情";
 "网络接口" = "网络接口";
 "IP 地址" = "IP 地址";
+
+/* Native settings redesign */
+"More" = "更多";
+"Modules" = "监控项目";
+"Preview" = "预览";
+"Enable module" = "启用此模块";
+"Fan Controls" = "风扇控制";
+"Sensor Sources" = "传感器来源";
+"No controllable fans detected" = "未检测到可控制的风扇";
+"Choose which sensors appear in the menu bar." = "选择要在菜单栏显示的传感器。";
+"Menu bar widgets" = "菜单栏小组件";
+"Click to show or hide a widget. Drag to change its order." = "点击显示或隐藏小组件，拖动可调整顺序。";

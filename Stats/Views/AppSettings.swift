@@ -94,16 +94,16 @@ class ApplicationSettings: NSView {
         let scrollView = ScrollableStackView(orientation: .vertical)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.stackView.edgeInsets = NSEdgeInsets(
-            top: 0,
-            left: Constants.Settings.margin,
-            bottom: Constants.Settings.margin,
-            right: Constants.Settings.margin
+            top: 24,
+            left: 24,
+            bottom: 24,
+            right: 24
         )
-        scrollView.stackView.spacing = Constants.Settings.margin
+        scrollView.stackView.spacing = 20
         
         let informationView = self.informationView()
         scrollView.stackView.addArrangedSubview(informationView)
-        informationView.widthAnchor.constraint(equalTo: scrollView.stackView.widthAnchor, constant: -Constants.Settings.margin * 2).isActive = true
+        informationView.widthAnchor.constraint(equalTo: scrollView.stackView.widthAnchor, constant: -48).isActive = true
         
         self.updateSelector = selectView(
             action: #selector(self.toggleUpdateInterval),
@@ -196,7 +196,7 @@ class ApplicationSettings: NSView {
         )
         self.planField = textView(SystemStats.shared.plan?.rawValue.capitalized ?? "Free")
         self.remoteView = PreferencesSection(title: "System Stats", [
-            PreferencesRow(localizedString("Authorization"), component: buttonView(#selector(self.loginToRemote), text: localizedString("Sign in"))),
+            PreferencesRow(localizedString("Authorization"), component: settingsButton(#selector(self.loginToRemote), text: localizedString("Sign in"))),
             PreferencesRow(localizedString("Identificator"), component: textView(SystemStats.shared.id.uuidString)),
             PreferencesRow(localizedString("Plan"), component: self.planField!),
             PreferencesRow(localizedString("Monitoring"), component: switchView(
@@ -205,8 +205,8 @@ class ApplicationSettings: NSView {
             )),
             PreferencesRow(localizedString("Control"), component: self.remoteControlBtn!),
             PreferencesRow(localizedString("Update"), component: self.remoteUpdatesBtn!),
-            PreferencesRow(component: buttonView(#selector(self.logoutFromRemote), text: localizedString("Sign out"))),
-            PreferencesRow(component: buttonView(#selector(self.deregisterFromRemote), text: localizedString("Deregister")))
+            PreferencesRow(component: settingsButton(#selector(self.logoutFromRemote), text: localizedString("Sign out"))),
+            PreferencesRow(component: settingsButton(#selector(self.deregisterFromRemote), text: localizedString("Deregister")))
         ])
         scrollView.stackView.addArrangedSubview(self.remoteView!)
         self.remoteView?.setRowVisibility(1, newState: false)
@@ -220,22 +220,22 @@ class ApplicationSettings: NSView {
         scrollView.stackView.addArrangedSubview(PreferencesSection(title: localizedString("Settings Data"), [
             PreferencesRow(
                 localizedString("Export settings"),
-                component: buttonView(#selector(self.exportSettings), text: localizedString("Save"))
+                component: settingsButton(#selector(self.exportSettings), text: localizedString("Save"))
             ),
             PreferencesRow(
                 localizedString("Import settings"),
-                component: buttonView(#selector(self.importSettings), text: localizedString("Choose file"))
+                component: settingsButton(#selector(self.importSettings), text: localizedString("Choose file"))
             ),
             PreferencesRow(
                 localizedString("Reset settings"),
-                component: buttonView(#selector(self.resetSettings), text: localizedString("Reset"))
+                component: settingsButton(#selector(self.resetSettings), text: localizedString("Reset"))
             )
         ]))
         
         self.fanHelperView = PreferencesSection(title: localizedString("Maintenance"), [
             PreferencesRow(
                 localizedString("Uninstall fan helper"),
-                component: buttonView(#selector(self.uninstallHelper), text: localizedString("Uninstall"))
+                component: settingsButton(#selector(self.uninstallHelper), text: localizedString("Uninstall"))
             )
         ])
         scrollView.stackView.addArrangedSubview(self.fanHelperView!)
@@ -248,10 +248,10 @@ class ApplicationSettings: NSView {
             scrollView.bottomAnchor.constraint(equalTo: self.bottomAnchor)
         ])
         
-        let CPUeButton = buttonView(#selector(self.toggleCPUeStressTest), text: localizedString("Run"))
-        let CPUpButton = buttonView(#selector(self.toggleCPUpStressTest), text: localizedString("Run"))
-        let CPUsButton = buttonView(#selector(self.toggleCPUsStressTest), text: localizedString("Run"))
-        let GPUButton = buttonView(#selector(self.toggleGPUStressTest), text: localizedString("Run"))
+        let CPUeButton = settingsButton(#selector(self.toggleCPUeStressTest), text: localizedString("Run"))
+        let CPUpButton = settingsButton(#selector(self.toggleCPUpStressTest), text: localizedString("Run"))
+        let CPUsButton = settingsButton(#selector(self.toggleCPUsStressTest), text: localizedString("Run"))
+        let GPUButton = settingsButton(#selector(self.toggleGPUStressTest), text: localizedString("Run"))
         
         self.CPUeButton = CPUeButton
         self.CPUpButton = CPUpButton
@@ -310,17 +310,17 @@ class ApplicationSettings: NSView {
     private func informationView() -> NSView {
         let view = NSStackView()
         view.translatesAutoresizingMaskIntoConstraints = false
-        view.heightAnchor.constraint(equalToConstant: 72).isActive = true
+        view.heightAnchor.constraint(equalToConstant: 48).isActive = true
         view.orientation = .horizontal
         view.distribution = .fill
         view.alignment = .centerY
         view.spacing = 12
-        view.edgeInsets = NSEdgeInsets(top: 12, left: 0, bottom: 12, right: 0)
+        view.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
         
         let iconView: NSImageView = NSImageView(image: NSImage(named: NSImage.Name("AppIcon"))!)
         iconView.imageScaling = .scaleProportionallyUpOrDown
-        iconView.widthAnchor.constraint(equalToConstant: 48).isActive = true
-        iconView.heightAnchor.constraint(equalToConstant: 48).isActive = true
+        iconView.widthAnchor.constraint(equalToConstant: 36).isActive = true
+        iconView.heightAnchor.constraint(equalToConstant: 36).isActive = true
 
         let identity = NSStackView()
         identity.orientation = .vertical
@@ -331,14 +331,14 @@ class ApplicationSettings: NSView {
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
             ?? "Stats"
         let statsName = NSTextField(labelWithString: displayName)
-        statsName.font = NSFont.systemFont(ofSize: 17, weight: .semibold)
+        statsName.font = NSFont.systemFont(ofSize: 15, weight: .semibold)
         statsName.isSelectable = true
         
         let versionNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as! String
         let buildNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as! String
         
         let statsVersion = NSTextField(labelWithString: "\(localizedString("Version")) \(versionNumber)")
-        statsVersion.font = NSFont.systemFont(ofSize: 12, weight: .regular)
+        statsVersion.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
         statsVersion.textColor = .secondaryLabelColor
         statsVersion.isSelectable = true
         statsVersion.toolTip = "\(localizedString("Build number")) \(buildNumber)"
@@ -346,12 +346,7 @@ class ApplicationSettings: NSView {
         identity.addArrangedSubview(statsName)
         identity.addArrangedSubview(statsVersion)
         
-        let updateButton: NSButton = NSButton()
-        updateButton.title = localizedString("Check for update")
-        updateButton.bezelStyle = .rounded
-        updateButton.controlSize = .small
-        updateButton.target = self
-        updateButton.action = #selector(self.updateAction)
+        let updateButton = self.settingsButton(#selector(self.updateAction), text: localizedString("Check for update"))
         updateButton.setContentHuggingPriority(.required, for: .horizontal)
         
         view.addArrangedSubview(iconView)
@@ -362,6 +357,14 @@ class ApplicationSettings: NSView {
         return view
     }
     
+    private func settingsButton(_ action: Selector, text: String) -> NSButton {
+        let button = self.buttonView(action, text: text)
+        button.bezelStyle = .rounded
+        button.controlSize = .small
+        button.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        return button
+    }
+
     // MARK: - actions
     
     @objc private func updateAction() {

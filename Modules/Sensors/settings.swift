@@ -12,7 +12,7 @@
 import Cocoa
 import Kit
 
-internal class Settings: NSStackView, Settings_v {
+internal class Settings: SettingsContainerView, Settings_v {
     private var updateIntervalValue: Int = 3
     private var hidState: Bool
     private var fanSpeedState: Bool = false
@@ -30,15 +30,16 @@ internal class Settings: NSStackView, Settings_v {
     private let title: String
     private var list: [Sensor_p] = []
     private var sensorsPrefs: PreferencesSection?
+    private let fanPreferences = SettingsContainerView()
+    private var showsFanControls: Bool?
     private var selectedSensor: String = "Average System Total"
     
     public init(_ module: ModuleType) {
         self.title = module.stringValue
         self.hidState = SystemKit.shared.device.platform == .m1 ? true : false
         
-        super.init(frame: NSRect.zero)
-        self.orientation = .vertical
-        self.spacing = Constants.Settings.margin
+        super.init()
+        self.identifier = NSUserInterfaceItemIdentifier("sensors-settings")
         
         self.updateIntervalValue = Store.shared.int(key: "\(self.title)_updateInterval", defaultValue: self.updateIntervalValue)
         self.hidState = Store.shared.bool(key: "\(self.title)_hid", defaultValue: self.hidState)
@@ -48,29 +49,26 @@ internal class Settings: NSStackView, Settings_v {
         self.fanValueState = FanValue(rawValue: Store.shared.string(key: "\(self.title)_fanValue", defaultValue: self.fanValueState.rawValue)) ?? .percentage
         self.selectedSensor = Store.shared.string(key: "\(self.title)_sensor", defaultValue: self.selectedSensor)
         
-        self.addArrangedSubview(PreferencesSection([
+        let monitoringPrefs = PreferencesSection(title: localizedString("Monitoring"), [
             PreferencesRow(localizedString("Update interval"), component: selectView(
                 action: #selector(self.changeUpdateInterval),
                 items: ReaderUpdateIntervals,
                 selected: "\(self.updateIntervalValue)"
-            ))
-        ]))
-        
-        self.addArrangedSubview(PreferencesSection([
-            PreferencesRow(localizedString("Fan value"), component: selectView(
-                action: #selector(self.toggleFanValue),
-                items: FanValues,
-                selected: self.fanValueState.rawValue
             )),
-            PreferencesRow(localizedString("Save the fan speed"), component: switchView(
-                action: #selector(self.toggleSpeedState),
-                state: self.fanSpeedState
-            )),
-            PreferencesRow(localizedString("Synchronize fan's control"), component: switchView(
-                action: #selector(self.toggleFansSync),
-                state: self.fansSyncState
+            PreferencesRow(localizedString("Sensor to show"), id: "active_sensor", component: selectView(
+                action: #selector(self.handleSelection),
+                items: [],
+                selected: self.selectedSensor
             ))
-        ]))
+        ])
+        monitoringPrefs.identifier = NSUserInterfaceItemIdentifier("sensor-monitoring")
+        monitoringPrefs.setRowVisibility("active_sensor", newState: false)
+        self.sensorsPrefs = monitoringPrefs
+        self.addArrangedSubview(monitoringPrefs)
+
+        self.fanPreferences.identifier = NSUserInterfaceItemIdentifier("sensor-fan-preferences")
+        self.addArrangedSubview(self.fanPreferences)
+        self.updateFanPreferences()
         
         var sensorsRows: [PreferencesRow] = [
             PreferencesRow(localizedString("Show unknown sensors"), component: switchView(
@@ -84,14 +82,8 @@ internal class Settings: NSStackView, Settings_v {
                 state: self.hidState
             )))
         }
-        sensorsRows.append(PreferencesRow(localizedString("Sensor to show"), id: "active_sensor", component: selectView(
-            action: #selector(self.handleSelection),
-            items: [],
-            selected: self.selectedSensor)
-        ))
-        let sensorsPrefs = PreferencesSection(sensorsRows)
-        self.sensorsPrefs = sensorsPrefs
-        self.addArrangedSubview(sensorsPrefs)
+        self.addArrangedSubview(PreferencesSection(title: localizedString("Sensor Sources"),
+            id: "sensor-sources", sensorsRows))
     }
     
     required init?(coder: NSCoder) {
@@ -100,15 +92,14 @@ internal class Settings: NSStackView, Settings_v {
     
     public func load(widgets: [widget_t]) {
         self.widgets = widgets
+        self.updateFanPreferences()
         var sensors = self.list
-        guard !sensors.isEmpty else {
-            return
-        }
         if !self.unknownSensorsState {
             sensors = sensors.filter({ $0.group != .unknown })
         }
         
-        self.subviews.filter({ $0.identifier == NSUserInterfaceItemIdentifier("sensor") }).forEach { v in
+        self.arrangedSubviews.filter({ $0.identifier == NSUserInterfaceItemIdentifier("sensor") }).forEach { v in
+            self.removeArrangedSubview(v)
             v.removeFromSuperview()
         }
         
@@ -121,7 +112,8 @@ internal class Settings: NSStackView, Settings_v {
         
         var buttonList: [KeyValue_t] = []
         types.forEach { (typ: SensorType) in
-            let section = PreferencesSection(title: localizedString(typ.rawValue))
+            let section = PreferencesSection(title: localizedString(typ.rawValue),
+                subtitle: localizedString("Choose which sensors appear in the menu bar."))
             section.identifier = NSUserInterfaceItemIdentifier("sensor")
             
             let filtered = sensors.filter{ $0.type == typ }
@@ -160,6 +152,43 @@ internal class Settings: NSStackView, Settings_v {
         guard let list else { return }
         self.list = self.unknownSensorsState ? list : list.filter({ $0.group != .unknown })
         self.load(widgets: self.widgets)
+    }
+
+    private func updateFanPreferences() {
+        // Sensor availability comes from the reader, rather than a model or
+        // architecture assumption. Computed aggregates are not physical fans.
+        let hasFans = self.list.contains { $0 is Fan && !$0.isComputed }
+        guard self.showsFanControls != hasFans else { return }
+        self.showsFanControls = hasFans
+        self.fanPreferences.arrangedSubviews.forEach {
+            self.fanPreferences.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
+
+        if hasFans {
+            let rows: [NSView] = [
+                PreferencesRow(localizedString("Fan value"), component: selectView(
+                    action: #selector(self.toggleFanValue),
+                    items: FanValues,
+                    selected: self.fanValueState.rawValue
+                )),
+                PreferencesRow(localizedString("Save the fan speed"), component: switchView(
+                    action: #selector(self.toggleSpeedState),
+                    state: self.fanSpeedState
+                )),
+                PreferencesRow(localizedString("Synchronize fan's control"), component: switchView(
+                    action: #selector(self.toggleFansSync),
+                    state: self.fansSyncState
+                ))
+            ]
+            self.fanPreferences.addArrangedSubview(PreferencesSection(title: localizedString("Fan Controls"),
+                id: "sensor-fan-controls", rows))
+        } else {
+            let caption = NSTextField(wrappingLabelWithString: localizedString("No controllable fans detected"))
+            caption.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+            caption.textColor = .secondaryLabelColor
+            self.fanPreferences.addArrangedSubview(caption)
+        }
     }
     
     @objc private func toggleSensor(_ sender: NSControl) {

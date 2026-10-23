@@ -13,26 +13,29 @@ import Cocoa
 import Kit
 
 public extension NSToolbarItem.Identifier {
-    static let toggleButton = NSToolbarItem.Identifier("toggleButton")
     static let previewButton = NSToolbarItem.Identifier("previewButton")
+    static let settingsSidebarSeparator = NSToolbarItem.Identifier("settingsSidebarSeparator")
 }
 
 class SettingsWindow: NSWindow, NSWindowDelegate, NSToolbarDelegate {
-    private static let size: CGSize = CGSize(width: 720, height: 480)
+    private static let size: CGSize = CGSize(width: 860, height: 620)
     private static let frameAutosaveName = "eu.exelban.Stats.Settings.WindowFrame"
     
     internal var onClose: (() -> Void)?
     
-    private let mainView: MainView = MainView(frame: NSRect(x: 0, y: 0, width: 540, height: 480))
-    private let sidebarView: SidebarView = SidebarView(frame: NSRect(x: 0, y: 0, width: 180, height: 480))
+    private let mainView: MainView = MainView(frame: NSRect(x: 0, y: 0, width: 660, height: 620))
+    private let sidebarView: SidebarView = SidebarView(frame: NSRect(x: 0, y: 0, width: 200, height: 620))
+    private weak var settingsSplitView: NSSplitView?
     
     private var dashboard: NSView = Dashboard()
     private var settings: ApplicationSettings = ApplicationSettings()
     
     private var toggleButton: NSControl? = nil
+    private var moduleToggleView: NSView? = nil
     private var activeModuleName: String? = nil
     private var visibleModuleName: String? = nil
-    private var settingsPreviewButton: NSView? = nil
+    private var settingsPreviewButton: SettingsPreviewButton? = nil
+    private static var modulePreviewStates: [String: Bool] = [:]
     
     init() {
         super.init(
@@ -47,7 +50,13 @@ class SettingsWindow: NSWindow, NSWindowDelegate, NSToolbarDelegate {
             defer: false
         )
         
+        self.toggleButton = self.mainView.moduleSwitch
+        self.toggleButton?.target = self
+        self.toggleButton?.action = #selector(self.toggleEnable)
+        self.moduleToggleView = self.mainView.moduleHeader
+
         let sidebarViewController = NSSplitViewController()
+        self.settingsSplitView = sidebarViewController.splitView
         
         let sidebarVC: NSViewController = NSViewController(nibName: nil, bundle: nil)
         sidebarVC.view = self.sidebarView
@@ -63,21 +72,23 @@ class SettingsWindow: NSWindow, NSWindowDelegate, NSToolbarDelegate {
         sidebarViewController.addSplitViewItem(sidebarItem)
         sidebarViewController.addSplitViewItem(contentItem)
         
+        sidebarItem.minimumThickness = 180
+        sidebarItem.maximumThickness = 240
+        sidebarItem.preferredThicknessFraction = 200 / SettingsWindow.size.width
         contentItem.minimumThickness = 540
         
         let newToolbar = NSToolbar(identifier: "eu.exelban.Stats.Settings.Toolbar")
         newToolbar.allowsUserCustomization = false
-        newToolbar.autosavesConfiguration = true
-        newToolbar.displayMode = .default
+        newToolbar.autosavesConfiguration = false
+        newToolbar.displayMode = .iconOnly
         newToolbar.showsBaselineSeparator = true
         newToolbar.delegate = self
         
         self.toolbar = newToolbar
+        self.toolbarStyle = .unified
         self.contentViewController = sidebarViewController
         self.titlebarAppearsTransparent = true
-        if #unavailable(macOS 26.0) {
-            self.backgroundColor = .clear
-        }
+        self.backgroundColor = .windowBackgroundColor
         self.isRestorable = true
         self.isReleasedWhenClosed = false
         self.delegate = self
@@ -86,7 +97,15 @@ class SettingsWindow: NSWindow, NSWindowDelegate, NSToolbarDelegate {
             self.positionCenter()
         }
         self.setIsVisible(false)
-        self.minSize = NSSize(width: SettingsWindow.size.width, height: SettingsWindow.size.height-Constants.Popup.headerHeight)
+        self.minSize = NSSize(width: 760, height: 520)
+        var restoredFrame = self.frame
+        if restoredFrame.width < self.minSize.width || restoredFrame.height < self.minSize.height {
+            restoredFrame.size.width = max(restoredFrame.width, self.minSize.width)
+            restoredFrame.size.height = max(restoredFrame.height, self.minSize.height)
+            self.setFrame(restoredFrame, display: false)
+        }
+        self.standardWindowButton(.miniaturizeButton)?.isEnabled = false
+        self.standardWindowButton(.zoomButton)?.isEnabled = false
         
         let windowController = NSWindowController()
         windowController.window = self
@@ -136,12 +155,20 @@ class SettingsWindow: NSWindow, NSWindowDelegate, NSToolbarDelegate {
     
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.type == NSEvent.EventType.keyDown && event.modifierFlags.contains(.command) {
-            if event.keyCode == 12 || event.keyCode == 13 {
+            switch event.charactersIgnoringModifiers?.lowercased() {
+            case "w":
                 self.close()
                 return true
-            } else if event.keyCode == 46 {
-                self.miniaturize(event)
+            case "q":
+                NSApp.terminate(self)
                 return true
+            case ",":
+                self.sidebarView.openMenu("Settings")
+                return true
+            case "m":
+                return true
+            default:
+                break
             }
         }
         return super.performKeyEquivalent(with: event)
@@ -153,29 +180,23 @@ class SettingsWindow: NSWindow, NSWindowDelegate, NSToolbarDelegate {
     
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch itemIdentifier {
+        case .settingsSidebarSeparator:
+            guard let splitView = self.settingsSplitView else { return nil }
+            return NSTrackingSeparatorToolbarItem(identifier: itemIdentifier, splitView: splitView, dividerIndex: 0)
         case .previewButton:
             let button = SettingsPreviewButton { [weak self] in
-                guard let moduleName = self?.activeModuleName else { return }
+                guard let self, let moduleName = self.activeModuleName else { return }
+                let visible = !(SettingsWindow.modulePreviewStates[moduleName] ?? true)
+                SettingsWindow.modulePreviewStates[moduleName] = visible
+                self.settingsPreviewButton?.setPreviewVisible(visible)
+                self.toolbar?.items.first { $0.itemIdentifier == .previewButton }?.label = self.settingsPreviewButton?.title ?? localizedString("Preview")
                 NotificationCenter.default.post(name: .togglePreview, object: nil, userInfo: ["module": moduleName])
             }
             self.settingsPreviewButton = button
             
             let toolbarItem = NSToolbarItem(itemIdentifier: itemIdentifier)
+            toolbarItem.label = localizedString("Preview")
             toolbarItem.view = button
-            toolbarItem.isBordered = false
-            
-            return toolbarItem
-        case .toggleButton:
-            let switchButton = NSSwitch()
-            switchButton.state = .on
-            switchButton.action = #selector(self.toggleEnable)
-            switchButton.target = self
-            switchButton.controlSize = .small
-            self.toggleButton = switchButton
-            
-            let toolbarItem = NSToolbarItem(itemIdentifier: itemIdentifier)
-            toolbarItem.toolTip = localizedString("Toggle the module")
-            toolbarItem.view = switchButton
             toolbarItem.isBordered = false
             
             return toolbarItem
@@ -185,10 +206,27 @@ class SettingsWindow: NSWindow, NSWindowDelegate, NSToolbarDelegate {
     }
     
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        return [.flexibleSpace, .previewButton, .toggleButton]
+        return [.settingsSidebarSeparator, .flexibleSpace, .previewButton]
     }
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        return [.flexibleSpace, .previewButton, .toggleButton]
+        return [.settingsSidebarSeparator, .flexibleSpace]
+    }
+
+    private func setPreviewAvailable(_ available: Bool) {
+        guard let toolbar = self.toolbar else { return }
+        let index = toolbar.items.firstIndex { $0.itemIdentifier == .previewButton }
+        if available {
+            if index == nil {
+                toolbar.insertItem(withItemIdentifier: .previewButton, at: toolbar.items.count)
+            }
+            if let moduleName = self.activeModuleName {
+                self.settingsPreviewButton?.setPreviewVisible(SettingsWindow.modulePreviewStates[moduleName] ?? true)
+                toolbar.items.first { $0.itemIdentifier == .previewButton }?.label = self.settingsPreviewButton?.title ?? localizedString("Preview")
+            }
+        } else if let index {
+            toolbar.removeItem(at: index)
+            self.settingsPreviewButton = nil
+        }
     }
     
     internal func open(module: String? = nil) {
@@ -216,19 +254,19 @@ class SettingsWindow: NSWindow, NSWindowDelegate, NSToolbarDelegate {
                 }
                 self.activeModuleName = detectedModule.config.name
                 toggleNSControlState(self.toggleButton, state: detectedModule.enabled ? .on : .off)
-                self.toggleButton?.isHidden = false
-                self.settingsPreviewButton?.isHidden = !detectedModule.config.hasPreview
+                self.moduleToggleView?.isHidden = false
+                self.setPreviewAvailable(detectedModule.config.hasPreview)
             } else if title == "Dashboard" {
                 self.activeModuleName = nil
                 view = self.dashboard
-                self.toggleButton?.isHidden = true
-                self.settingsPreviewButton?.isHidden = true
+                self.moduleToggleView?.isHidden = true
+                self.setPreviewAvailable(false)
             } else if title == "Settings" {
                 self.activeModuleName = nil
                 self.settings.viewWillAppear()
                 view = self.settings
-                self.toggleButton?.isHidden = true
-                self.settingsPreviewButton?.isHidden = true
+                self.moduleToggleView?.isHidden = true
+                self.setPreviewAvailable(false)
             }
             
             self.title = localizedString(title)
@@ -267,54 +305,79 @@ class SettingsWindow: NSWindow, NSWindowDelegate, NSToolbarDelegate {
 // MARK: - MainView
 
 private class MainView: NSView {
-    fileprivate let container: NSStackView = NSStackView()
-    
-    private let background: NSVisualEffectView = {
-        let view = NSVisualEffectView(frame: NSRect.zero)
-        view.blendingMode = .withinWindow
-        view.material = .contentBackground
-        view.state = .active
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        view.setContentHuggingPriority(.defaultLow, for: .vertical)
-        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        return view
-    }()
-    
+    fileprivate let container = NSStackView()
+    fileprivate let moduleHeader = NSStackView()
+    fileprivate let moduleSwitch = NSSwitch()
+
     override init(frame: NSRect) {
-        super.init(frame: NSRect.zero)
-        
+        super.init(frame: frame)
         self.translatesAutoresizingMaskIntoConstraints = false
+        self.wantsLayer = true
+
+        let label = NSTextField(labelWithString: localizedString("Enable module"))
+        label.font = .systemFont(ofSize: NSFont.systemFontSize)
+        self.moduleSwitch.controlSize = .small
+        self.moduleSwitch.setAccessibilityLabel(localizedString("Enable module"))
+        self.moduleSwitch.toolTip = localizedString("Toggle the module")
+        self.moduleSwitch.state = .on
+        self.moduleHeader.translatesAutoresizingMaskIntoConstraints = false
+        self.moduleHeader.orientation = .horizontal
+        self.moduleHeader.distribution = .fill
+        self.moduleHeader.alignment = .centerY
+        self.moduleHeader.spacing = 12
+        self.moduleHeader.edgeInsets = NSEdgeInsets(top: 12, left: 24, bottom: 12, right: 24)
+        self.moduleHeader.setHuggingPriority(.required, for: .vertical)
+        self.moduleHeader.addArrangedSubview(label)
+        self.moduleHeader.addArrangedSubview(NSView())
+        self.moduleHeader.addArrangedSubview(self.moduleSwitch)
+        self.moduleHeader.isHidden = true
+
         self.container.translatesAutoresizingMaskIntoConstraints = false
-        
-        self.addSubview(self.background, positioned: .below, relativeTo: .none)
-        self.addSubview(self.container)
-        
+        self.container.orientation = .vertical
+        self.container.alignment = .leading
+        self.container.setHuggingPriority(.defaultLow, for: .horizontal)
+        self.container.setHuggingPriority(.defaultLow, for: .vertical)
+
+        let body = NSStackView(views: [self.moduleHeader, self.container])
+        body.translatesAutoresizingMaskIntoConstraints = false
+        body.orientation = .vertical
+        body.alignment = .leading
+        body.distribution = .fill
+        body.detachesHiddenViews = true
+        body.spacing = 0
+        self.addSubview(body)
         NSLayoutConstraint.activate([
-            self.background.leadingAnchor.constraint(equalTo: leadingAnchor),
-            self.background.trailingAnchor.constraint(equalTo: trailingAnchor),
-            self.background.topAnchor.constraint(equalTo: topAnchor),
-            self.background.bottomAnchor.constraint(equalTo: bottomAnchor),
-            
-            self.container.leadingAnchor.constraint(equalTo: leadingAnchor),
-            self.container.trailingAnchor.constraint(equalTo: trailingAnchor),
-            self.container.topAnchor.constraint(equalTo: topAnchor, constant: Constants.Popup.headerHeight*1.4),
-            self.container.bottomAnchor.constraint(equalTo: bottomAnchor)
+            body.leadingAnchor.constraint(equalTo: self.leadingAnchor),
+            body.trailingAnchor.constraint(equalTo: self.trailingAnchor),
+            body.topAnchor.constraint(equalTo: self.safeAreaLayoutGuide.topAnchor),
+            body.bottomAnchor.constraint(equalTo: self.bottomAnchor),
+            self.moduleHeader.widthAnchor.constraint(equalTo: body.widthAnchor),
+            self.container.widthAnchor.constraint(equalTo: body.widthAnchor)
         ])
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        self.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        self.needsDisplay = true
+    }
+
     fileprivate func setView(_ view: NSView) {
-        self.container.subviews.forEach{ $0.removeFromSuperview() }
+        self.container.arrangedSubviews.forEach { $0.removeFromSuperview() }
         self.container.addArrangedSubview(view)
-        
+        view.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            view.leftAnchor.constraint(equalTo: self.container.leftAnchor),
-            view.rightAnchor.constraint(equalTo: self.container.rightAnchor),
+            view.leadingAnchor.constraint(equalTo: self.container.leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: self.container.trailingAnchor),
             view.topAnchor.constraint(equalTo: self.container.topAnchor),
             view.bottomAnchor.constraint(equalTo: self.container.bottomAnchor)
         ])
@@ -323,310 +386,313 @@ private class MainView: NSView {
 
 // MARK: - Sidebar
 
-private class SidebarView: NSStackView {
-    private let scrollView: ScrollableStackView
-    
-    private let supportPopover = NSPopover()
-    private var pauseButton: NSButton? = nil
-    
+private class SidebarView: NSView, NSTableViewDataSource, NSTableViewDelegate {
+    private struct Entry {
+        let title: String
+        let icon: NSImage?
+        var isGroup: Bool = false
+    }
+
+    private let tableView = NSTableView()
+    private let moreButton = NSPopUpButton(frame: .zero, pullsDown: true)
+    private var pauseMenuItem: NSMenuItem?
+    private var entries: [Entry] = []
+    private var selectedTitle: String?
+    private var isUpdatingSelection = false
+
     private var pauseState: Bool {
         get { Store.shared.bool(key: "pause", defaultValue: false) }
         set { Store.shared.set(key: "pause", value: newValue) }
     }
-    
-    private var dashboardIcon: NSImage { NSImage(systemSymbolName: "circle.grid.3x3.fill", accessibilityDescription: nil)! }
-    private var settingsIcon: NSImage { iconFromSymbol(name: "gear", scale: .large) }
-    private var bugIcon: NSImage { iconFromSymbol(name: "ladybug", scale: .large) }
-    private var supportIcon: NSImage { iconFromSymbol(name: "heart.fill", scale: .large) }
-    private var pauseIcon: NSImage { iconFromSymbol(name: "pause.fill", scale: .large) }
-    private var resumeIcon: NSImage { iconFromSymbol(name: "play.fill", scale: .large) }
-    private var closeIcon: NSImage { iconFromSymbol(name: "power", scale: .large) }
-    
+
     override init(frame: NSRect) {
-        self.scrollView = ScrollableStackView(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height))
-        self.scrollView.stackView.spacing = 0
-        self.scrollView.stackView.edgeInsets = NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
-        
         super.init(frame: frame)
-        self.orientation = .vertical
-        self.spacing = 0
-        self.widthAnchor.constraint(equalToConstant: frame.width).isActive = true
-        
-        let spacer = NSView()
-        spacer.heightAnchor.constraint(equalToConstant: 10).isActive = true
-        
-        self.scrollView.stackView.addArrangedSubview(MenuItem(icon: self.dashboardIcon, title: "Dashboard"))
-        self.scrollView.stackView.addArrangedSubview(MenuItem(icon: self.settingsIcon, title: "Settings"))
-        self.scrollView.stackView.addArrangedSubview(spacer)
-        
-        self.supportPopover.behavior = .transient
-        self.supportPopover.contentViewController = self.supportView()
-        
-        let additionalButtons: NSStackView = NSStackView(frame: NSRect(x: 0, y: 0, width: frame.width, height: 45))
-        additionalButtons.heightAnchor.constraint(equalToConstant: 45).isActive = true
-        additionalButtons.orientation = .horizontal
-        additionalButtons.distribution = .fillEqually
-        additionalButtons.alignment = .centerY
-        additionalButtons.spacing = 0
-        
-        let pauseButton = self.makeButton(title: localizedString("Pause the Stats"), image: self.pauseState ? self.resumeIcon : self.pauseIcon, action: #selector(togglePause))
-        self.pauseButton = pauseButton
-        
-        additionalButtons.addArrangedSubview(self.makeButton(title: localizedString("Support the application"), image: self.supportIcon, action: #selector(donate)))
-        additionalButtons.addArrangedSubview(self.makeButton(title: localizedString("Report a bug"), image: self.bugIcon, action: #selector(reportBug)))
-        additionalButtons.addArrangedSubview(pauseButton)
-        additionalButtons.addArrangedSubview(self.makeButton(title: localizedString("Close application"), image: self.closeIcon, action: #selector(closeApp)))
-        
-        self.addArrangedSubview(self.scrollView)
-        self.addArrangedSubview(additionalButtons)
-        
+        self.translatesAutoresizingMaskIntoConstraints = false
+
+        let scrollView = NSScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.automaticallyAdjustsContentInsets = false
+
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("settings-navigation"))
+        column.resizingMask = .autoresizingMask
+        self.tableView.addTableColumn(column)
+        self.tableView.identifier = NSUserInterfaceItemIdentifier("settings-sidebar")
+        self.tableView.headerView = nil
+        self.tableView.style = .sourceList
+        self.tableView.selectionHighlightStyle = .sourceList
+        self.tableView.backgroundColor = .clear
+        self.tableView.rowSizeStyle = .medium
+        self.tableView.rowHeight = 30
+        self.tableView.intercellSpacing = NSSize(width: 0, height: 2)
+        self.tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        self.tableView.allowsEmptySelection = false
+        self.tableView.allowsMultipleSelection = false
+        self.tableView.dataSource = self
+        self.tableView.delegate = self
+        self.tableView.setAccessibilityLabel(localizedString("Settings"))
+        scrollView.documentView = self.tableView
+
+        self.moreButton.translatesAutoresizingMaskIntoConstraints = false
+        self.moreButton.identifier = NSUserInterfaceItemIdentifier("settings-more-menu")
+        self.moreButton.controlSize = .small
+        self.moreButton.bezelStyle = .texturedRounded
+        self.moreButton.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        self.moreButton.setAccessibilityLabel(localizedString("More"))
+        self.moreButton.toolTip = localizedString("More")
+        self.moreButton.menu = self.makeMoreMenu()
+        self.moreButton.setContentHuggingPriority(.required, for: .horizontal)
+
+        self.addSubview(scrollView)
+        self.addSubview(self.moreButton)
+        NSLayoutConstraint.activate([
+            scrollView.leadingAnchor.constraint(equalTo: self.leadingAnchor, constant: 8),
+            scrollView.trailingAnchor.constraint(equalTo: self.trailingAnchor, constant: -8),
+            scrollView.topAnchor.constraint(equalTo: self.safeAreaLayoutGuide.topAnchor, constant: 8),
+            scrollView.bottomAnchor.constraint(equalTo: self.moreButton.topAnchor, constant: -12),
+            self.moreButton.leadingAnchor.constraint(equalTo: self.leadingAnchor, constant: 12),
+            self.moreButton.bottomAnchor.constraint(equalTo: self.bottomAnchor, constant: -12)
+        ])
         NotificationCenter.default.addObserver(self, selector: #selector(listenForPause), name: .pause, object: nil)
     }
-    
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     deinit {
         NotificationCenter.default.removeObserver(self, name: .pause, object: nil)
     }
-    
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    
+
     fileprivate func openMenu(_ title: String) {
-        self.scrollView.stackView.subviews.forEach({ (m: NSView) in
-            if let menu = m as? MenuItem {
-                if menu.title == title {
-                    menu.activate()
-                } else {
-                    menu.reset()
-                }
-            }
-        })
+        guard let row = self.entries.firstIndex(where: { !$0.isGroup && $0.title == title }) else { return }
+        guard self.selectedTitle != title else { return }
+        self.selectedTitle = title
+        self.isUpdatingSelection = true
+        self.tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        self.tableView.scrollRowToVisible(row)
+        self.isUpdatingSelection = false
+        NotificationCenter.default.post(name: .openModuleSettings, object: nil, userInfo: ["module": title])
     }
-    
+
     fileprivate func setModules(_ list: [Module]) {
-        list.reversed().forEach { (m: Module) in
-            if !m.available { return }
-            let menu: NSView = MenuItem(icon: m.config.icon, title: m.config.name)
-            self.scrollView.stackView.insertArrangedSubview(menu, at: 3)
+        self.entries = [
+            Entry(title: "Dashboard", icon: NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: nil)),
+            Entry(title: "Settings", icon: NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil))
+        ]
+        let available = list.filter { $0.available }
+        if !available.isEmpty {
+            self.entries.append(Entry(title: "Modules", icon: nil, isGroup: true))
+            self.entries.append(contentsOf: available.map { Entry(title: $0.config.name, icon: $0.config.icon) })
+        }
+        self.tableView.reloadData()
+        if let title = self.selectedTitle,
+           let row = self.entries.firstIndex(where: { !$0.isGroup && $0.title == title }) {
+            self.isUpdatingSelection = true
+            self.tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            self.isUpdatingSelection = false
         }
     }
-    
-    private func makeButton(title: String, image: NSImage, action: Selector) -> NSButton {
-        let button = NSButton()
-        button.title = title
-        button.toolTip = title
-        button.bezelStyle = .regularSquare
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.imageScaling = .scaleNone
-        button.image = image
-        button.contentTintColor = .secondaryLabelColor
-        button.isBordered = false
-        button.action = action
-        button.target = self
-        button.focusRingType = .none
-        button.widthAnchor.constraint(equalToConstant: 33).isActive = true
-        
-        let rect = NSRect(x: 0, y: 0, width: 33, height: 45)
-        let trackingArea = NSTrackingArea(
-            rect: rect,
-            options: [NSTrackingArea.Options.activeAlways, NSTrackingArea.Options.mouseEnteredAndExited, NSTrackingArea.Options.activeInActiveApp],
-            owner: self,
-            userInfo: ["button": title]
-        )
-        self.addTrackingArea(trackingArea)
-        
-        return button
+
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        self.entries.count
     }
-    
-    private func supportView() -> NSViewController {
-        let vc: NSViewController = NSViewController(nibName: nil, bundle: nil)
-        let view: NSStackView = NSStackView(frame: NSRect(x: 0, y: 0, width: 220, height: 54))
-        view.spacing = 10
-        view.edgeInsets = NSEdgeInsets(top: 0, left: 15, bottom: 0, right: 0)
-        view.orientation = .horizontal
-        
-        let systemStats = SupportButtonView(name: "System Stats", image: "AppIcon", action: {
-            NSWorkspace.shared.open(URL(string: "https://www.system-stats.com")!)
-        })
-        let github = SupportButtonView(name: "GitHub Sponsors", image: "github", action: {
-            NSWorkspace.shared.open(URL(string: "https://github.com/sponsors/exelban")!)
-        })
-        let paypal = SupportButtonView(name: "PayPal", image: "paypal", action: {
-            NSWorkspace.shared.open(URL(string: "https://www.paypal.com/donate?hosted_button_id=3DS5JHDBATMTC")!)
-        })
-        let koFi = SupportButtonView(name: "Ko-fi", image: "ko-fi", action: {
-            NSWorkspace.shared.open(URL(string: "https://ko-fi.com/exelban")!)
-        })
-        let patreon = SupportButtonView(name: "Patreon", image: "patreon", action: {
-            NSWorkspace.shared.open(URL(string: "https://patreon.com/exelban")!)
-        })
-        
-        view.addArrangedSubview(systemStats)
-        view.addArrangedSubview(github)
-        view.addArrangedSubview(paypal)
-        view.addArrangedSubview(koFi)
-        view.addArrangedSubview(patreon)
-        
-        vc.view = view
-        return vc
+
+    func tableView(_ tableView: NSTableView, isGroupRow row: Int) -> Bool {
+        self.entries[row].isGroup
     }
-    
+
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        !self.entries[row].isGroup
+    }
+
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        self.entries[row].isGroup ? 28 : 30
+    }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        let entry = self.entries[row]
+        let identifier = NSUserInterfaceItemIdentifier(entry.isGroup ? "settings-sidebar-group" : "settings-sidebar-item")
+        let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? SidebarCell
+            ?? SidebarCell(identifier: identifier, isGroup: entry.isGroup)
+        cell.textField?.stringValue = localizedString(entry.title)
+        cell.imageView?.image = entry.icon
+        cell.toolTip = localizedString(entry.title)
+        cell.setAccessibilityLabel(localizedString(entry.title))
+        return cell
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        guard !self.isUpdatingSelection else { return }
+        let row = self.tableView.selectedRow
+        guard self.entries.indices.contains(row), !self.entries[row].isGroup else { return }
+        self.openMenu(self.entries[row].title)
+    }
+
+    private func makeMoreMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        let label = NSMenuItem(title: localizedString("More"), action: nil, keyEquivalent: "")
+        label.image = NSImage(systemSymbolName: "ellipsis", accessibilityDescription: nil)
+        menu.addItem(label)
+
+        let support = NSMenuItem(title: localizedString("Support the application"), action: nil, keyEquivalent: "")
+        support.image = NSImage(systemSymbolName: "heart", accessibilityDescription: nil)
+        let supportMenu = NSMenu()
+        let destinations = [
+            ("System Stats", "https://www.system-stats.com"),
+            ("GitHub Sponsors", "https://github.com/sponsors/exelban"),
+            ("PayPal", "https://www.paypal.com/donate?hosted_button_id=3DS5JHDBATMTC"),
+            ("Ko-fi", "https://ko-fi.com/exelban"),
+            ("Patreon", "https://patreon.com/exelban")
+        ]
+        for (title, address) in destinations {
+            let item = NSMenuItem(title: title, action: #selector(openSupportLink), keyEquivalent: "")
+            item.target = self
+            item.representedObject = address
+            supportMenu.addItem(item)
+        }
+        support.submenu = supportMenu
+        menu.addItem(support)
+
+        let report = NSMenuItem(title: localizedString("Report a bug"), action: #selector(reportBug), keyEquivalent: "")
+        report.target = self
+        report.image = NSImage(systemSymbolName: "ladybug", accessibilityDescription: nil)
+        menu.addItem(report)
+        menu.addItem(.separator())
+
+        let pause = NSMenuItem(title: "", action: #selector(togglePause), keyEquivalent: "")
+        pause.target = self
+        self.pauseMenuItem = pause
+        self.updatePauseMenuItem()
+        menu.addItem(pause)
+        menu.addItem(.separator())
+
+        let quit = NSMenuItem(title: localizedString("Close application"), action: #selector(closeApp), keyEquivalent: "q")
+        quit.target = self
+        menu.addItem(quit)
+        return menu
+    }
+
+    @objc private func openSupportLink(_ sender: NSMenuItem) {
+        guard let address = sender.representedObject as? String, let url = URL(string: address) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     @objc private func reportBug() {
         NSWorkspace.shared.open(URL(string: "https://github.com/exelban/stats/issues/new?template=bug_report.yml")!)
     }
-    
-    @objc private func donate(_ sender: NSButton) {
-        self.supportPopover.show(relativeTo: sender.bounds, of: sender, preferredEdge: NSRectEdge.minY)
-    }
-    
-    @objc private func closeApp(_ sender: NSButton) {
+
+    @objc private func closeApp(_ sender: Any?) {
         NSApp.terminate(sender)
     }
-    
+
     @objc private func togglePause() {
         self.pauseState = !self.pauseState
-        self.pauseButton?.toolTip = localizedString(self.pauseState ? "Resume the Stats" : "Pause the Stats")
-        self.pauseButton?.image = self.pauseState ? self.resumeIcon : self.pauseIcon
+        self.updatePauseMenuItem()
         NotificationCenter.default.post(name: .pause, object: nil, userInfo: ["state": self.pauseState])
     }
-    
-    @objc func listenForPause() {
-        self.pauseButton?.toolTip = localizedString(self.pauseState ? "Resume the Stats" : "Pause the Stats")
-        self.pauseButton?.image = self.pauseState ? self.resumeIcon : self.pauseIcon
+
+    @objc private func listenForPause() {
+        self.updatePauseMenuItem()
+    }
+
+    private func updatePauseMenuItem() {
+        self.pauseMenuItem?.title = localizedString(self.pauseState ? "Resume the Stats" : "Pause the Stats")
+        self.pauseMenuItem?.image = NSImage(systemSymbolName: self.pauseState ? "play" : "pause", accessibilityDescription: nil)
     }
 }
 
-private class MenuItem: NSView {
-    fileprivate let title: String
-    
-    private var active: Bool = false
-    private var imageView: NSImageView? = nil
-    private var titleView: NSTextField? = nil
-    
-    init(icon: NSImage?, title: String) {
-        self.title = title
-        
-        super.init(frame: NSRect.zero)
-        
-        self.wantsLayer = true
-        self.layer?.cornerRadius = 5
-        
-        var toolTip = ""
-        if title == "Settings" {
-            toolTip = localizedString("Open application settings")
-        } else if title == "Dashboard" {
-            toolTip = localizedString("Open dashboard")
+private class SidebarCell: NSTableCellView {
+    private let isGroup: Bool
+
+    init(identifier: NSUserInterfaceItemIdentifier, isGroup: Bool) {
+        self.isGroup = isGroup
+        super.init(frame: .zero)
+        self.identifier = identifier
+
+        let label = NSTextField(labelWithString: "")
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .systemFont(ofSize: isGroup ? NSFont.smallSystemFontSize : NSFont.systemFontSize, weight: isGroup ? .semibold : .regular)
+        label.lineBreakMode = .byTruncatingTail
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        self.textField = label
+        self.addSubview(label)
+
+        if isGroup {
+            NSLayoutConstraint.activate([
+                label.leadingAnchor.constraint(equalTo: self.leadingAnchor, constant: 6),
+                label.trailingAnchor.constraint(equalTo: self.trailingAnchor, constant: -6),
+                label.bottomAnchor.constraint(equalTo: self.bottomAnchor, constant: -4)
+            ])
         } else {
-            toolTip = localizedString("Open \(title) settings")
+            let icon = NSImageView()
+            icon.translatesAutoresizingMaskIntoConstraints = false
+            icon.imageScaling = .scaleProportionallyDown
+            self.imageView = icon
+            self.addSubview(icon)
+            NSLayoutConstraint.activate([
+                icon.leadingAnchor.constraint(equalTo: self.leadingAnchor, constant: 6),
+                icon.centerYAnchor.constraint(equalTo: self.centerYAnchor),
+                icon.widthAnchor.constraint(equalToConstant: 16),
+                icon.heightAnchor.constraint(equalToConstant: 16),
+                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
+                label.trailingAnchor.constraint(equalTo: self.trailingAnchor, constant: -6),
+                label.centerYAnchor.constraint(equalTo: self.centerYAnchor)
+            ])
         }
-        self.toolTip = toolTip
-        
-        let imageView = NSImageView()
-        if icon != nil {
-            imageView.image = icon!
-        }
-        imageView.frame = NSRect(x: 8, y: (32 - 18)/2, width: 18, height: 18)
-        imageView.wantsLayer = true
-        imageView.contentTintColor = .labelColor
-        self.imageView = imageView
-        
-        let titleView = TextView(frame: NSRect(x: 34, y: ((32 - 16)/2) + 1, width: 100, height: 16))
-        titleView.textColor = .labelColor
-        titleView.font = NSFont.systemFont(ofSize: 13, weight: .regular)
-        titleView.stringValue = localizedString(title)
-        self.titleView = titleView
-        
-        self.addSubview(imageView)
-        self.addSubview(titleView)
-        
-        NSLayoutConstraint.activate([
-            self.heightAnchor.constraint(equalToConstant: 32)
-        ])
+        self.updateColors()
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
-    override func mouseDown(with: NSEvent) {
-        self.activate()
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { self.updateColors() }
     }
-    
-    fileprivate func activate() {
-        guard !self.active else { return }
-        self.active = true
-        
-        NotificationCenter.default.post(name: .openModuleSettings, object: nil, userInfo: ["module": self.title])
-        
-        self.layer?.backgroundColor = NSColor.selectedContentBackgroundColor.cgColor
-        self.imageView?.contentTintColor = .white
-        self.titleView?.textColor = .white
-    }
-    
-    fileprivate func reset() {
-        self.layer?.backgroundColor = .clear
-        self.imageView?.contentTintColor = .labelColor
-        self.titleView?.textColor = .labelColor
-        self.active = false
+
+    private func updateColors() {
+        if self.isGroup {
+            self.textField?.textColor = .secondaryLabelColor
+        } else {
+            let selected = self.backgroundStyle == .emphasized
+            self.textField?.textColor = selected ? .alternateSelectedControlTextColor : .labelColor
+            self.imageView?.contentTintColor = selected ? .alternateSelectedControlTextColor : .controlAccentColor
+        }
     }
 }
 
-private class SettingsPreviewButton: NSStackView {
-    private var callback: () -> Void
-    
-    private var settingsIcon: NSImage { iconFromSymbol(name: "gear", scale: .large) }
-    private var previewIcon: NSImage { iconFromSymbol(name: "command", scale: .large) }
-    
-    private var button: NSButton? = nil
-    private var isSettingsEnabled: Bool = false
-    
+private class SettingsPreviewButton: NSButton {
+    private let callback: () -> Void
+
     fileprivate init(callback: @escaping () -> Void) {
         self.callback = callback
-        
         super.init(frame: .zero)
-        
-        self.translatesAutoresizingMaskIntoConstraints = false
-        self.edgeInsets = NSEdgeInsets(
-            top: Constants.Settings.margin,
-            left: Constants.Settings.margin,
-            bottom: Constants.Settings.margin,
-            right: Constants.Settings.margin
-        )
-        self.spacing = Constants.Settings.margin
-        
-        let button = NSButton()
-        button.toolTip = localizedString("Open module settings")
-        button.bezelStyle = .regularSquare
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.imageScaling = .scaleNone
-        button.image = self.settingsIcon
-        button.contentTintColor = .secondaryLabelColor
-        button.isBordered = false
-        button.action = #selector(self.action)
-        button.target = self
-        button.focusRingType = .none
-        button.widthAnchor.constraint(equalToConstant: Constants.Widget.height).isActive = true
-        self.button = button
-        
-        self.addArrangedSubview(button)
+        self.controlSize = .small
+        self.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        self.bezelStyle = .rounded
+        self.imagePosition = .imageLeading
+        self.target = self
+        self.action = #selector(toggleView)
+        self.setPreviewVisible(true)
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
-    @objc private func action() {
-        guard let button = self.button else { return }
+
+    fileprivate func setPreviewVisible(_ visible: Bool) {
+        self.title = localizedString(visible ? "Settings" : "Preview")
+        self.image = NSImage(systemSymbolName: visible ? "slider.horizontal.3" : "macwindow", accessibilityDescription: nil)
+        self.toolTip = localizedString(visible ? "Open module settings" : "Preview")
+        self.setAccessibilityLabel(self.title)
+    }
+
+    @objc private func toggleView() {
         self.callback()
-        
-        self.isSettingsEnabled = !self.isSettingsEnabled
-        
-        if self.isSettingsEnabled {
-            button.image = self.previewIcon
-            button.toolTip = localizedString("Close module settings")
-        } else {
-            button.image = self.settingsIcon
-            button.toolTip = localizedString("Open module settings")
-        }
     }
 }

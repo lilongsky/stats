@@ -19,7 +19,7 @@ internal class Popup: PopupWrapper {
     private var fanValueState: FanValue = .percentage
     
     private var sensors: [Sensor_p] = []
-    private let settingsView: NSStackView = NSStackView()
+    private let settingsView = SettingsContainerView()
     private let sensorsCache = PopupCache<[Sensor_p]>()
     
     private var fanControlState: Bool {
@@ -36,8 +36,7 @@ internal class Popup: PopupWrapper {
         self.spacing = 0
         self.translatesAutoresizingMaskIntoConstraints = false
         
-        self.settingsView.orientation = .vertical
-        self.settingsView.spacing = Constants.Settings.margin
+        self.settingsView.spacing = 20
         
         self.settingsView.addArrangedSubview(PreferencesSection([
             PreferencesRow(localizedString("Keyboard shortcut"), component: KeyboardShartcutView(
@@ -77,7 +76,10 @@ internal class Popup: PopupWrapper {
     
     internal func setup(_ values: [Sensor_p]? = nil, reload: Bool = false) {
         guard let values = reload ? self.sensors : values else { return }
-        self.settingsView.arrangedSubviews.filter { $0.identifier?.rawValue == "fan-curve-settings" }.forEach { $0.removeFromSuperview() }
+        self.settingsView.arrangedSubviews.filter { $0.identifier?.rawValue == "fan-curve-settings" }.forEach {
+            self.settingsView.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
         self.settingsView.addArrangedSubview(FanCurveSettingsView(sensors: values))
         let fans = values.filter({ $0.type == .fan && $0.popupState })
         var sensors = values
@@ -87,7 +89,8 @@ internal class Popup: PopupWrapper {
         
         self.subviews.forEach({ $0.removeFromSuperview() })
         if !reload {
-            self.settingsView.subviews.filter({ $0.identifier == NSUserInterfaceItemIdentifier("sensor") }).forEach { v in
+            self.settingsView.arrangedSubviews.filter({ $0.identifier == NSUserInterfaceItemIdentifier("sensor") }).forEach { v in
+                self.settingsView.removeArrangedSubview(v)
                 v.removeFromSuperview()
             }
         }
