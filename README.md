@@ -16,7 +16,86 @@ Opening another copy of Compact checks for an earlier registered Compact instanc
 
 ## Deployment
 
-Build locally using the steps below. This fork currently has no custom GitHub release binary. The locally validated ZIP is an ad-hoc signed development package, not a notarized public release; validation on one Mac does not establish that another Mac will allow it.
+Choose the shared-ZIP local-signing route below, or build from source using the later steps. Neither route requires a paid Apple developer account. The shared ZIP is a development package, not a notarized public release; local validation does not establish that another Mac will allow it.
+
+### Install a shared ZIP with local signing (no developer account)
+
+Recipients can install the shared **Apple Silicon** build on **macOS 14 or later** without an Apple developer account or signing certificate. This route uses macOS command-line tools and does not build from source; Python, Git, the official Stats resource bundle and full Xcode are not needed.
+
+The sender should share the complete `Stats Compact.zip`, this guide and the ZIP's SHA-256 through a trusted channel. The ZIP already includes the runtime frameworks. Do not use the upstream official Stats download as a substitute. There is currently no custom GitHub Release binary.
+
+**Local ad-hoc signing is not Developer ID signing or Apple notarization.** In `codesign --sign -`, the single dash selects an ad-hoc signature and requires no account. After verifying the sender's ZIP hash and the original bundle signature, the commands remove only that temporary app copy's `com.apple.quarantine` download marker. This is a deliberate local trust decision for this app; it does not disable Gatekeeper globally. The command also removes the fixed bundle's inherited ticket at `Contents/CodeResources`, because re-signing invalidates it. It keeps the separate resource seal at `Contents/_CodeSignature/CodeResources` and preserves the bundled vendor SMC helper's existing signature. Frameworks and nested app/extension bundles are signed from the inside out, then the main app is signed last. See Apple's [ad-hoc signature definition](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html) and [code-signing guidance](https://developer.apple.com/forums/thread/701514).
+
+1. Save the shared file as `~/Downloads/Stats Compact.zip` and quit every running Stats Compact copy. Official Stats may remain installed.
+2. Paste the installation block into Terminal. Its expected SHA-256 is pinned to the current shared ZIP, `2310e997ab0ec106176eb181e1fb18cfdbc7d8c50626c8d4511bfa8d557c7e53`. For a later ZIP, obtain the new expected hash from its sender or release notes and update `compact_sha256`; a hash calculated only from the received file does not establish its source. A mismatch stops before extraction or signing.
+3. The block signs a temporary copy, backs up any existing installation and installs the complete bundle at `~/Applications/Stats Compact.app`. It does not launch the app or change its preferences/history.
+
+```sh
+(
+  set -eu
+  compact_zip="$HOME/Downloads/Stats Compact.zip"
+  compact_sha256="2310e997ab0ec106176eb181e1fb18cfdbc7d8c50626c8d4511bfa8d557c7e53"
+  compact_install="$HOME/Applications/Stats Compact.app"
+
+  printf '%s  %s\n' "$compact_sha256" "$compact_zip" | /usr/bin/shasum -a 256 -c -
+  if /usr/bin/pgrep -f '/Stats Compact[.]app/Contents/MacOS/Stats([[:space:]]|$)' >/dev/null; then
+    printf '%s\n' 'Quit Stats Compact before installing.' >&2
+    exit 1
+  fi
+  if [ -L "$compact_install" ]; then
+    printf '%s\n' 'Stop: the installation path is a symbolic link.' >&2
+    exit 1
+  fi
+
+  compact_work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/stats-compact-self-sign.XXXXXX")"
+  trap '/bin/rm -rf "$compact_work"' EXIT
+  /usr/bin/ditto -x -k "$compact_zip" "$compact_work"
+  compact_candidate="$compact_work/Stats Compact.app"
+  /usr/bin/codesign --verify --deep --strict "$compact_candidate"
+
+  /bin/rm -f "$compact_candidate/Contents/CodeResources"
+  /usr/bin/xattr -dr com.apple.quarantine "$compact_candidate"
+  /usr/bin/find "$compact_candidate/Contents" -depth -type d \
+    \( -name '*.framework' -o -name '*.app' -o -name '*.appex' -o -name '*.xpc' \) \
+    -exec /usr/bin/codesign --force --sign - --timestamp=none {} +
+  /usr/bin/codesign --force --sign - --timestamp=none "$compact_candidate"
+  /usr/bin/codesign --verify --deep --strict --verbose=2 "$compact_candidate"
+
+  /bin/mkdir -p "$HOME/Applications"
+  if [ -e "$compact_install" ]; then
+    compact_backup="$(/usr/bin/mktemp -d "$HOME/Applications/Stats-Compact-backup.XXXXXX")"
+    /bin/mv "$compact_install" "$compact_backup/Stats Compact.app"
+    printf 'Previous installation saved to: %s\n' "$compact_backup/Stats Compact.app"
+  fi
+  /usr/bin/ditto "$compact_candidate" "$compact_install"
+  /usr/bin/codesign --verify --deep --strict --verbose=2 "$compact_install"
+  printf 'Installed without launching: %s\n' "$compact_install"
+)
+```
+
+Before opening the installed app, run the native preflight below. It checks the **actual installed path** and launches only when both signature verification and Gatekeeper's explicit allowed result succeed. Use this guarded block for subsequent manual launches too; Python is not required.
+
+```sh
+(
+  set -eu
+  compact_install="$HOME/Applications/Stats Compact.app"
+  /usr/bin/codesign --verify --deep --strict "$compact_install"
+  compact_policy="$(LC_ALL=C /usr/bin/gktool scan "$compact_install" 2>&1)" || {
+    printf '%s\n' "$compact_policy" >&2
+    exit 1
+  }
+  printf '%s\n' "$compact_policy"
+  printf '%s\n' "$compact_policy" | /usr/bin/grep -Fq \
+    'Scan completed and software is allowed by system policy.'
+  /usr/bin/open "$compact_install"
+)
+```
+
+If signing or policy checking fails, keep the error and do not proceed with launch. A valid local signature does not guarantee Gatekeeper approval on every Mac, especially a managed Mac. If an old installation was backed up, move the failed new bundle aside and restore the entire old app from the printed backup path; then run the same preflight. Do not merge bundles or remove `Contents/_CodeSignature`. Keep automatic updates set to `Never`; sign each newly shared ZIP again with this procedure.
+
+Validation for the current ZIP: extraction from a temporary archive tagged as downloaded, inside-out signing, complete-bundle copy, strict verification and Gatekeeper preflight passed on the development Mac. The inherited ticket was absent afterwards and the vendor SMC helper was unchanged. No app was launched, the existing app/ZIP/preferences were untouched, and the temporary copies were removed. This is command validation on one Mac, not another recipient's installation or a test of privileged fan control, login items or desktop widgets.
+
+The source-build route below remains available and has separate prerequisites.
 
 ### 1. Prepare the Mac and the official resource dependency
 
@@ -172,12 +251,12 @@ For development after a Clock-only change, `python3 build-local.py --only Clock 
 
 The currently available main UI has been reviewed in Simplified Chinese with light appearance, within the limits in the [UI coverage matrix](Tests/ui-validation.md). The rebuilt app passed live rechecks of GPU percentage updates, Battery popup layout and the Clock table's enabled column. English/Simplified Chinese, light/dark and multiple-width automated coverage is offscreen; see [validation scope](FORK.md#validation) for results and limits.
 
-- Confirm that preflight prints `Signature verified; Gatekeeper allows:` for `~/Applications/Stats Compact.app`, then launch through the guarded command.
+- For a shared ZIP, confirm that strict signature verification succeeds and native preflight prints `Scan completed and software is allowed by system policy.` for the installed app. The source-build Python helper instead prints `Signature verified; Gatekeeper allows:`. Launch through the matching guarded command.
 - Check that menu items remain independently movable and configurable, including CPU/GPU graphs, pie size and spacing. Check live data and the CPU popup after frequency samples arrive, section reordering and process-count changes; sections should remain separate.
 - Open the Dashboard, General, GPU, memory, disk, network and Sensors settings, switch module panes and use keyboard navigation in the sidebar. Check that every settings group fills the same form width, labels and controls remain separate, and the widget-style selector appears only in Widgets. Scroll over the popup-section list in both directions and check numeric thresholds with unit selectors. Dashboard labels should remain horizontal and long values should wrap. Fan preferences should match the detected hardware.
 - Check that footer tool choices persist and open the selected apps. In the Clock calendar, check fast scrolling, momentum, abrupt reversal and Today. Quit and reopen through preflight to check that preferences and history persist. See [FORK.md](FORK.md) for the automated checks and their scope.
 - For build failures, read the relevant `build/*.log` file, including `sign.log`, `verify-signature.log` or `preflight.log`. Confirm the official resource dependency is exactly 3.0.22. If an earlier output was based on the wrong resource version, preserve its app and modules together before rebuilding from a clean output with the correct official dependency.
-- If macOS reports that the app is damaged or altered, or preflight refuses it, **stop and do not launch it**. Preserve the failing output and logs, and inspect or rebuild the complete bundle. Do not disable Gatekeeper or remove quarantine attributes to bypass the check. An interrupted installation may leave a partial target; use the saved complete bundle for recovery.
+- If macOS reports that the app is damaged or altered, or preflight refuses it, **stop and do not launch it**. Preserve the failing output and logs, and inspect or rebuild the complete bundle. Do not disable Gatekeeper globally. For a verified shared ZIP, use the explicit local-signing procedure above, which removes only that temporary app copy's download quarantine marker and still requires final policy preflight; do not apply that step to unverified downloads. An interrupted installation may leave a partial target; use the saved complete bundle for recovery.
 
 ## Upstream reference
 

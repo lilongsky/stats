@@ -14,11 +14,90 @@ Stats Compact 是基于 [exelban/stats](https://github.com/exelban/stats) v3.0.2
 
 再次打开另一份 Compact 时，会先检查并复用较早注册的 Compact 实例，再决定是否初始化读取器和设置。切换到新构建前请先退出当前 Compact；官方 Stats 仍使用独立的应用标识。
 
-目前只有开发机上的本地构建 ZIP，尚未在 GitHub 发布定制版二进制安装包。现有 ZIP 是临时签名的开发包，没有作为公证安装包发布，也未验证其他机器的系统策略是否允许运行。请在目标 Mac 上按本指南构建和预检。
+当前可由接收者按下方的 ZIP 本机签名流程安装，也可继续使用源码构建流程；两者都不需要付费 Apple 开发者账号。现有 ZIP 是临时签名的开发包，尚未作为公证安装包在 GitHub 发布；本机验证不代表其他机器的系统策略必然允许运行。
 
-## 环境与官方资源基线
+## 接收分享 ZIP：无需开发者账号，本机签名安装
 
-需要 Apple Silicon Mac、macOS 14 或更新版本、Apple Command Line Tools、Python 3 和 Git。构建脚本的编译目标是 `arm64-apple-macos12.0`，但本指南要求每次手动启动前使用 `/usr/bin/gktool` 预检，因此部署要求为 macOS 14+。
+接收者使用 **Apple Silicon（M 系列）Mac、macOS 14 或更新版本**，即可在自己的 Mac 上临时签名安装，无需 Apple 开发者账号或签名证书。这条流程使用 macOS 命令行工具，不编译源码，因此不需要 Python、Git、官方 Stats 资源包或完整 Xcode。
+
+分享者应通过可信渠道提供完整的 `Stats Compact.zip`、本说明及 ZIP 的 SHA-256。ZIP 已包含运行所需框架；上游官方 Stats 的下载链接对应另一个应用。目前尚未发布定制版 GitHub Release 二进制包。
+
+**本机 ad-hoc 临时签名不等于 Developer ID 签名或 Apple 公证。** `codesign --sign -` 中的单个短横线表示无需证书的临时签名。以下命令先核对分享者提供的 ZIP 哈希和原始包签名，再只移除临时 App 副本的 `com.apple.quarantine` 下载隔离标记；这是用户对该 App 的本地信任选择，不会全局关闭 Gatekeeper。固定包中继承的旧票据 `Contents/CodeResources` 也会被移除，因为重新签名会使它失效；另一个路径 `Contents/_CodeSignature/CodeResources` 是必须保留的资源签名封套，不会删除。命令按由内到外的顺序签名 framework 和嵌套 App／扩展，最后签主 App，并保留随包提供的原厂 SMC helper 签名。参考 Apple 的[临时签名定义](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html)与[签名指引](https://developer.apple.com/forums/thread/701514)。
+
+1. 将收到的文件保存为 `~/Downloads/Stats Compact.zip`，退出所有正在运行的 Stats Compact。官方 Stats 可继续保留。
+2. 在“终端”粘贴下面的安装命令。命令中的 SHA-256 固定为当前分享 ZIP 的 `2310e997ab0ec106176eb181e1fb18cfdbc7d8c50626c8d4511bfa8d557c7e53`。以后更换 ZIP 时，应从分享者或发布说明取得新的预期哈希并更新 `compact_sha256`；只计算收到文件自身的哈希不能确认来源。哈希不符会在解压、签名前停止。
+3. 命令只重签临时副本，备份已有安装后，把完整新包安装到 `~/Applications/Stats Compact.app`。它不会启动 App，也不会改动偏好或历史数据。
+
+```sh
+(
+  set -eu
+  compact_zip="$HOME/Downloads/Stats Compact.zip"
+  compact_sha256="2310e997ab0ec106176eb181e1fb18cfdbc7d8c50626c8d4511bfa8d557c7e53"
+  compact_install="$HOME/Applications/Stats Compact.app"
+
+  printf '%s  %s\n' "$compact_sha256" "$compact_zip" | /usr/bin/shasum -a 256 -c -
+  if /usr/bin/pgrep -f '/Stats Compact[.]app/Contents/MacOS/Stats([[:space:]]|$)' >/dev/null; then
+    printf '%s\n' 'Quit Stats Compact before installing.' >&2
+    exit 1
+  fi
+  if [ -L "$compact_install" ]; then
+    printf '%s\n' 'Stop: the installation path is a symbolic link.' >&2
+    exit 1
+  fi
+
+  compact_work="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/stats-compact-self-sign.XXXXXX")"
+  trap '/bin/rm -rf "$compact_work"' EXIT
+  /usr/bin/ditto -x -k "$compact_zip" "$compact_work"
+  compact_candidate="$compact_work/Stats Compact.app"
+  /usr/bin/codesign --verify --deep --strict "$compact_candidate"
+
+  /bin/rm -f "$compact_candidate/Contents/CodeResources"
+  /usr/bin/xattr -dr com.apple.quarantine "$compact_candidate"
+  /usr/bin/find "$compact_candidate/Contents" -depth -type d \
+    \( -name '*.framework' -o -name '*.app' -o -name '*.appex' -o -name '*.xpc' \) \
+    -exec /usr/bin/codesign --force --sign - --timestamp=none {} +
+  /usr/bin/codesign --force --sign - --timestamp=none "$compact_candidate"
+  /usr/bin/codesign --verify --deep --strict --verbose=2 "$compact_candidate"
+
+  /bin/mkdir -p "$HOME/Applications"
+  if [ -e "$compact_install" ]; then
+    compact_backup="$(/usr/bin/mktemp -d "$HOME/Applications/Stats-Compact-backup.XXXXXX")"
+    /bin/mv "$compact_install" "$compact_backup/Stats Compact.app"
+    printf 'Previous installation saved to: %s\n' "$compact_backup/Stats Compact.app"
+  fi
+  /usr/bin/ditto "$compact_candidate" "$compact_install"
+  /usr/bin/codesign --verify --deep --strict --verbose=2 "$compact_install"
+  printf 'Installed without launching: %s\n' "$compact_install"
+)
+```
+
+安装后，先用下面的原生命令检查**实际安装路径**。只有完整签名验证与 Gatekeeper 明确允许的结果都通过，才会打开 App；之后每次手动启动也使用这个命令块，不需要 Python。
+
+```sh
+(
+  set -eu
+  compact_install="$HOME/Applications/Stats Compact.app"
+  /usr/bin/codesign --verify --deep --strict "$compact_install"
+  compact_policy="$(LC_ALL=C /usr/bin/gktool scan "$compact_install" 2>&1)" || {
+    printf '%s\n' "$compact_policy" >&2
+    exit 1
+  }
+  printf '%s\n' "$compact_policy"
+  printf '%s\n' "$compact_policy" | /usr/bin/grep -Fq \
+    'Scan completed and software is allowed by system policy.'
+  /usr/bin/open "$compact_install"
+)
+```
+
+签名或系统策略检查失败时，保留错误信息并停止启动。本机签名有效并不保证每台 Mac 的 Gatekeeper 都允许，受管理的 Mac 尤其可能有额外策略。如果命令已经备份旧安装，可先把失败的新包移到别处，再从打印的备份路径恢复整个旧 App，然后重复预检。不要合并覆盖 bundle 或删除 `Contents/_CodeSignature`。自动更新保持“从不”；以后收到新的 ZIP 时，重新按本流程签名安装。
+
+当前 ZIP 已在开发机验证：从带下载隔离标记的临时 ZIP 解压、由内到外签名、整包复制、严格验签和 Gatekeeper 预检均通过。重签后的旧票据已移除，原厂 SMC helper 未变；验证未启动 App，未修改现有应用、ZIP 或用户偏好，临时副本已自动清理。这是本机命令验证，不代表其他接收者已安装成功，也未验证提权风扇控制、登录项或桌面小组件。
+
+下方的源码构建流程仍可使用，其环境要求与接收 ZIP 的安装方式不同。
+
+## 从源码构建：环境与官方资源基线
+
+以下源码构建流程需要 Apple Silicon Mac、macOS 14 或更新版本、Apple Command Line Tools、Python 3 和 Git。构建脚本的编译目标是 `arm64-apple-macos12.0`，但本指南要求每次手动启动前使用 `/usr/bin/gktool` 预检，因此部署要求为 macOS 14+。
 
 可以先检查工具；如尚未安装 Command Line Tools，再运行 `xcode-select --install` 并完成系统安装流程。
 
@@ -85,7 +164,7 @@ python3 check-local-app.py "build/Stats Compact.app"
 
 ## 每次启动前检查实际路径
 
-`check-local-app.py` 只检查，不启动目标。它要求严格签名验证通过，并且 Gatekeeper 明确允许该路径；仅签名通过还不够。每次手动启动已安装版本，都运行：
+从源码部署时，可使用下面的 Python 检查；接收 ZIP 的用户使用上方不依赖 Python 的原生预检块即可。`check-local-app.py` 只检查，不启动目标。它要求严格签名验证通过，并且 Gatekeeper 明确允许该路径；仅签名通过还不够。每次手动启动已安装版本，都运行：
 
 ```sh
 python3 check-local-app.py "$HOME/Applications/Stats Compact.app" && open "$HOME/Applications/Stats Compact.app"
@@ -204,6 +283,6 @@ Compact 使用独立的偏好与数据路径：
 
 ## 出现“已损坏”或预检失败
 
-停止反复双击或重试启动。保留预检错误和 `build/*.log`，核对官方资源版本，并检查或重新构建完整应用包。如果旧输出使用了错误版本的资源，先成套保存其 app 和 modules，再以正确的官方资源从空输出构建。构建输出预检通过后，按“安装独立应用”步骤将旧安装整包备份、复制到空路径，再预检实际安装路径。不要关闭 Gatekeeper 或移除隔离属性来绕过检查。
+停止反复双击或重试启动。保留预检错误和 `build/*.log`，核对官方资源版本，并检查或重新构建完整应用包。如果旧输出使用了错误版本的资源，先成套保存其 app 和 modules，再以正确的官方资源从空输出构建。构建输出预检通过后，按“安装独立应用”步骤将旧安装整包备份、复制到空路径，再预检实际安装路径。不要全局关闭 Gatekeeper。对于已核对来源与哈希的分享 ZIP，使用上方明确的本机签名流程：它仅移除临时 App 副本的下载隔离标记，并仍要求最终策略预检；不要把该步骤应用于未核验的下载。
 
-只有该实际路径的检查通过，才使用 `python3 check-local-app.py "目标路径" && open "目标路径"` 启动；仍未通过时先解决错误，保留备份。
+只有该实际路径的检查通过，才启动 App：接收 ZIP 的用户使用上方原生预检与启动命令块；从源码部署的用户也可使用 `python3 check-local-app.py "目标路径" && open "目标路径"`。仍未通过时先解决错误，保留备份。
