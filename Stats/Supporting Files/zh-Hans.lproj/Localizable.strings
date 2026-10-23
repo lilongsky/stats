@@ -657,3 +657,15 @@
 "Choose which sensors appear in the menu bar." = "选择要在菜单栏显示的传感器。";
 "Menu bar widgets" = "菜单栏小组件";
 "Click to show or hide a widget. Drag to change its order." = "点击显示或隐藏小组件，拖动可调整顺序。";
+
+/* Device overview and monitoring groups */
+"Hardware" = "硬件";
+"Device Information" = "设备信息";
+"Processes" = "进程";
+"Traffic" = "网络流量";
+"Connectivity" = "连接探测";
+"Traffic source" = "流量来源";
+"Probe protocol" = "探测协议";
+"Data format" = "数据计量方式";
+"Rate unit" = "速率单位";
+"Transfer Rates" = "传输速率";

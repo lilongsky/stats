@@ -57,6 +57,16 @@ The 24-point content margins and 20-point group spacing are local
 design choices, not numerical requirements imposed by Apple. The window also
 contains a monitoring Dashboard, so manual resizing remains available.
 
+The Dashboard fills the content area with a compact device header and separate
+Hardware and Device Information groups. Its labels share a single-line column;
+selectable values wrap within the remaining width. The scroll viewport is pinned
+to all four content edges. GPU and disk monitoring options share a group, memory
+process refresh controls sit with process options, and network traffic and
+connectivity preferences have distinct headings and field names. Unit thresholds
+retain the natural widths of the numeric field, stepper and unit menu. A popup
+section list that fits completely forwards wheel events to the settings page;
+lists with more than eight rows retain their internal native scroll view.
+
 The form container establishes card widths explicitly rather than inferring
 its layout from an existing superview. Sensors builds static cards before being
 attached to a window, then adds or replaces sensor groups when a reader list
@@ -136,6 +146,9 @@ After building, run:
 python3 Tests/run-feature-models.py
 python3 Tests/run-settings-checks.py
 python3 Tests/run-settings-checks.py --locale en_US --language en
+python3 Tests/run-dashboard-checks.py --output-dir build/dashboard-evidence
+python3 Tests/run-dashboard-checks.py --output-dir build/dashboard-evidence-en --locale en_US --language en
+python3 Tests/run-popup-scroll-checks.py
 python3 Tests/run-cpu-popup-checks.py
 python3 Tests/run-calendar-checks.py
 python3 Tests/run-calendar-gestures.py
@@ -153,6 +166,16 @@ with isolated preferences, then writes offscreen light/dark PNGs. It covers
 wrapping, control alignment, complete table rows, section visibility/order,
 shortcut choices and widget size/default/reset synchronization.
 
+The Dashboard runner compiles the real view with synthetic formatted device data,
+including long values, without querying the machine's serial number. It checks
+420-, 540- and 760-point widths, light/dark appearance, construction order, full
+width, single-line labels, complete wrapping, scrolling and uptime refresh. The
+popup-scroll runner checks the real short-list responder chain in both directions,
+plus long-list keyboard scrolling and section reorder controls. Offscreen wheel
+events establish event routing; actual scrolling displacement is checked in the
+running app. The settings runner also checks native unit thresholds in enabled
+and disabled states at three widths and exercises their existing input callbacks.
+
 It also compiles the actual internal Sensors module settings, popup settings,
 notification settings and production sensor value models into a temporary app
 with its own preference and notification identity. That regression constructs the real form
@@ -167,11 +190,12 @@ readers, load the application delegate, show a production window or command a
 physical fan. These checks therefore establish layout and state behavior;
 installed-window appearance and hardware behavior need separate live checks.
 
-The redesigned settings checks pass 1,607 assertions in Chinese and 1,607 in
+The redesigned settings checks pass 1,769 assertions in Chinese and 1,769 in
 English. Each language exports 40 isolated previews. The checks include the
 shortcut recorder button inside its composite control and a compact duration
-editor, in addition to card and row alignment. CPU popup checks pass 96
-assertions and calendar checks pass 320 against the same rebuilt Kit.
+editor, in addition to card and row alignment. Dashboard checks pass 1,381 assertions per language; popup scroll routing passes
+26. CPU popup checks pass 96 assertions and calendar checks pass 320 against the
+same rebuilt Kit.
 
 The CPU popup regression check compiles the real production popup in a hidden
 AppKit window with isolated preferences. It covers late frequency arrival,

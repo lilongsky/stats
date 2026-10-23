@@ -2029,7 +2029,10 @@ public class StepperInput: NSStackView, NSTextFieldDelegate, PreferencesSwitchWi
         super.init(frame: .zero)
         
         self.orientation = .horizontal
+        self.alignment = .centerY
         self.spacing = 2
+        self.setHuggingPriority(.required, for: .horizontal)
+        self.setContentCompressionResistancePriority(.required, for: .horizontal)
         
         self.valueView.font = NSFont.systemFont(ofSize: 12, weight: .regular)
         self.valueView.textColor = .textColor
@@ -2041,11 +2044,10 @@ public class StepperInput: NSStackView, NSTextFieldDelegate, PreferencesSwitchWi
         self.valueView.delegate = self
         self.valueView.stringValue = "\(value)"
         self.valueView.translatesAutoresizingMaskIntoConstraints = false
-        self.valueView.widthAnchor.constraint(greaterThanOrEqualToConstant: 35).isActive = true
         let digits = [value, range.lowerBound, range.upperBound].map { String($0).count }.max() ?? 1
         let sample = String(repeating: "8", count: digits) as NSString
         let editWidth = max(35, ceil(sample.size(withAttributes: [.font: self.valueView.font!]).width + 12))
-        self.valueView.widthAnchor.constraint(lessThanOrEqualToConstant: editWidth).isActive = true
+        self.valueView.widthAnchor.constraint(equalToConstant: editWidth).isActive = true
         self.valueView.setContentHuggingPriority(.required, for: .horizontal)
         
         self.stepperView.font = NSFont.systemFont(ofSize: 12, weight: .regular)
@@ -2056,6 +2058,8 @@ public class StepperInput: NSStackView, NSTextFieldDelegate, PreferencesSwitchWi
         self.stepperView.valueWraps = false
         self.stepperView.target = self
         self.stepperView.action = #selector(self.onStepperChange)
+        self.stepperView.setContentHuggingPriority(.required, for: .horizontal)
+        self.stepperView.setContentCompressionResistancePriority(.required, for: .horizontal)
         
         self.addArrangedSubview(self.valueView)
         self.addArrangedSubview(self.stepperView)
@@ -2077,8 +2081,10 @@ public class StepperInput: NSStackView, NSTextFieldDelegate, PreferencesSwitchWi
                 items: units,
                 selected: unit
             )
+            self.unitsView?.controlSize = .small
+            self.unitsView?.setContentHuggingPriority(.required, for: .horizontal)
+            self.unitsView?.setContentCompressionResistancePriority(.required, for: .horizontal)
             self.addArrangedSubview(self.unitsView!)
-            self.widthAnchor.constraint(equalToConstant: 124).isActive = true
         }
     }
     
@@ -2143,9 +2149,12 @@ public class PreferencesSwitch: NSStackView {
         
         self.orientation = .horizontal
         self.alignment = .centerY
-        self.spacing = Constants.Settings.margin
+        self.spacing = 8
         
         let btn = switchView(action: #selector(self.callback), state: state)
+        btn.controlSize = .mini
+        with.setContentHuggingPriority(.required, for: .horizontal)
+        with.setContentCompressionResistancePriority(.required, for: .horizontal)
         with.isEnabled = state
         
         self.addArrangedSubview(NSView())

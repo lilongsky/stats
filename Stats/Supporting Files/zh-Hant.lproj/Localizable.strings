@@ -657,3 +657,15 @@
 "Choose which sensors appear in the menu bar." = "選擇要在選單列顯示的感測器。";
 "Menu bar widgets" = "選單列小組件";
 "Click to show or hide a widget. Drag to change its order." = "點選顯示或隱藏小組件，拖移可調整順序。";
+
+/* Device overview and monitoring groups */
+"Hardware" = "硬體";
+"Device Information" = "裝置資訊";
+"Processes" = "程序";
+"Traffic" = "網路流量";
+"Connectivity" = "連線偵測";
+"Traffic source" = "流量來源";
+"Probe protocol" = "偵測協定";
+"Data format" = "資料計量方式";
+"Rate unit" = "速率單位";
+"Transfer Rates" = "傳輸速率";

@@ -69,33 +69,30 @@ internal class Settings: SettingsContainerView, Settings_v {
             $0.removeFromSuperview()
         }
         
-        self.addArrangedSubview(PreferencesSection([
-            PreferencesRow(localizedString("Update interval"), component: selectView(
-                action: #selector(self.changeUpdateInterval),
-                items: ReaderUpdateIntervals,
-                selected: "\(self.updateIntervalValue)"
-            ))
-        ]))
-        
-        #if arch(x86_64)
-        if !widgets.filter({ $0 == .mini }).isEmpty {
-            self.addArrangedSubview(PreferencesSection([
-                PreferencesRow(localizedString("Show GPU type"), component: switchView(
-                    action: #selector(self.toggleShowType),
-                    state: self.showTypeValue
-                ))
-            ]))
-        }
-        #endif
-        
         self.button = selectView(
             action: #selector(self.handleSelection),
             items: [],
             selected: ""
         )
-        self.addArrangedSubview(PreferencesSection([
+        let monitoring = PreferencesSection(title: localizedString("Monitoring"), [
+            PreferencesRow(localizedString("Update interval"), component: selectView(
+                action: #selector(self.changeUpdateInterval),
+                items: ReaderUpdateIntervals,
+                selected: "\(self.updateIntervalValue)"
+            )),
             PreferencesRow(localizedString("GPU to show"), component: self.button!)
-        ]))
+        ])
+        
+        #if arch(x86_64)
+        if !widgets.filter({ $0 == .mini }).isEmpty {
+            monitoring.add(PreferencesRow(localizedString("Show GPU type"), component: switchView(
+                action: #selector(self.toggleShowType),
+                state: self.showTypeValue
+            )))
+        }
+        #endif
+        
+        self.addArrangedSubview(monitoring)
     }
     
     internal func setList(_ gpus: GPUs) {

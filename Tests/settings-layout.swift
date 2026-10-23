@@ -462,6 +462,135 @@ private func verifyInsertedStackWidth(_ checks: Checks) {
     }, "a 180pt scroll stack gives added and inserted height-only rows the same 164pt usable width")
 }
 
+private func verifyUnitStepperLayout(_ checks: Checks) throws {
+    for width: CGFloat in [420, 540, 760] {
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 240))
+        let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.close() }
+        let body = SettingsContainerView()
+        host.addSubview(body)
+        NSLayoutConstraint.activate([
+            body.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            body.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+            body.topAnchor.constraint(equalTo: host.topAnchor),
+            body.bottomAnchor.constraint(equalTo: host.bottomAnchor)
+        ])
+
+        var valueCallbacks: [[Int]] = [[], []]
+        var unitCallbacks: [[String]] = [[], []]
+        var toggleCallbacks: [[Bool]] = [[], []]
+        var inputs: [StepperInput] = []
+        var compounds: [PreferencesSwitch] = []
+        var rows: [PreferencesRow] = []
+        let titles = [localizedString("Swap size"), localizedString("Widget activation threshold")]
+        for index in titles.indices {
+            let input = StepperInput(index == 0 ? 1 : 1024,
+                range: NSRange(location: 1, length: 1023), unit: SizeUnit.GB.key, units: SizeUnit.allCases,
+                callback: { valueCallbacks[index].append($0) },
+                unitCallback: { unitCallbacks[index].append($0.key) })
+            let compound = PreferencesSwitch(action: { toggleCallbacks[index].append(controlState($0)) },
+                                               state: false, with: input)
+            let row = PreferencesRow(titles[index], component: compound)
+            inputs.append(input)
+            compounds.append(compound)
+            rows.append(row)
+        }
+        let section = PreferencesSection(rows)
+        body.addArrangedSubview(section)
+        host.layoutSubtreeIfNeeded()
+
+        for index in inputs.indices {
+            let input = inputs[index]
+            guard let field = input.arrangedSubviews.compactMap({ $0 as? NSTextField }).first(where: { $0.isEditable }),
+                  let stepper = input.arrangedSubviews.compactMap({ $0 as? NSStepper }).first,
+                  let units = input.arrangedSubviews.compactMap({ $0 as? NSPopUpButton }).first,
+                  let toggle = compounds[index].arrangedSubviews.compactMap({ $0 as? NSSwitch }).first else {
+                throw SettingsCheckError(message: "Missing native unit stepper components")
+            }
+            let controls: [NSControl] = [field, stepper, units]
+            let sample = "8888" as NSString
+            let expectedDigitWidth = max(35, ceil(sample.size(withAttributes: [.font: field.font!]).width + 12))
+            var disabledFrames: [NSRect] = []
+
+            for (phase, enabled) in [false, true, false].enumerated() {
+                if phase > 0 {
+                    toggle.state = enabled ? .on : .off
+                    try checks.fire(toggle, "\(Int(width))pt: the compound threshold switch dispatches its action")
+                }
+                host.layoutSubtreeIfNeeded()
+                body.layoutSubtreeIfNeeded()
+                let frames = controls.map { alignmentFrame($0, in: input) }
+                let rowFrames = ([toggle] as [NSControl] + controls).map { alignmentFrame($0, in: rows[index]) }
+                let unitIntrinsic = units.alignmentRect(forFrame: NSRect(origin: .zero, size: units.intrinsicContentSize))
+                let separated = frames.indices.allSatisfy { first in
+                    frames.indices.filter { $0 > first }.allSatisfy { !overlaps(frames[first], frames[$0]) }
+                }
+                checks.check(frames.allSatisfy { !$0.isEmpty && input.bounds.insetBy(dx: -0.6, dy: -0.6).contains($0) } && separated,
+                             "\(Int(width))pt \(enabled ? "enabled" : "disabled"): value, stepper and units occupy separate visible alignment rectangles")
+                checks.check(rowFrames.indices.allSatisfy { first in
+                    !rowFrames[first].isEmpty &&
+                        rows[index].bounds.insetBy(dx: -0.6, dy: -0.6).contains(rowFrames[first]) &&
+                        rowFrames.indices.filter { $0 > first }.allSatisfy { !overlaps(rowFrames[first], rowFrames[$0]) }
+                }, "\(Int(width))pt: the switch and all unit-stepper controls fit their real preferences row without overlap")
+                let label = rows[index].arrangedSubviews[0].convert(rows[index].arrangedSubviews[0].bounds, to: rows[index])
+                checks.check(!overlaps(label, compounds[index].convert(compounds[index].bounds, to: rows[index])),
+                             "\(Int(width))pt: the threshold label remains separate from its compound controls")
+                checks.check(frames[0].width + 0.6 >= expectedDigitWidth &&
+                             unitIntrinsic.width > 0 && frames[2].width + 0.6 >= unitIntrinsic.width,
+                             "\(Int(width))pt: four-digit values and the native unit selector retain their full minimum widths")
+                checks.check(input.isEnabled == enabled && controls.allSatisfy { $0.isEnabled == enabled } &&
+                             toggle.isEnabled && toggle.controlSize == .mini,
+                             "\(Int(width))pt: the mini switch consistently enables or disables every threshold input")
+                if phase == 0 {
+                    disabledFrames = frames
+                } else {
+                    checks.check(zip(disabledFrames, frames).allSatisfy {
+                        abs($0.0.minX - $0.1.minX) < 0.6 && abs($0.0.width - $0.1.width) < 0.6
+                    }, "\(Int(width))pt: toggling enabled state preserves the numeric, stepper and unit layout")
+                }
+            }
+            checks.check(toggleCallbacks[index] == [true, false] &&
+                         valueCallbacks[index].isEmpty && unitCallbacks[index].isEmpty,
+                         "threshold visibility changes invoke only the existing switch callback")
+            toggle.state = .on
+            try checks.fire(toggle, "threshold inputs can be enabled again for native action checks")
+            field.stringValue = "9999"
+            input.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: field))
+            checks.check(field.stringValue == "1024" && abs(stepper.doubleValue - 10.24) < 0.000001 &&
+                         valueCallbacks[index].last == 1024,
+                         "unit steppers preserve the upper bound and numeric callback")
+            field.stringValue = "0"
+            input.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: field))
+            checks.check(field.stringValue == "1" && abs(stepper.doubleValue - 0.01) < 0.000001 &&
+                         valueCallbacks[index].last == 1,
+                         "unit steppers preserve the lower bound and numeric callback")
+            field.stringValue = "4a2"
+            input.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: field))
+            stepper.doubleValue = 0.43
+            try checks.fire(stepper, "the real native stepper dispatches its production action")
+            checks.check(field.stringValue == "43" && valueCallbacks[index] == [1024, 1, 42, 43] &&
+                         abs(stepper.minValue - 0.01) < 0.000001 && abs(stepper.maxValue - 10.24) < 0.000001 &&
+                         abs(stepper.increment - 0.01) < 0.000001 && !stepper.valueWraps,
+                         "unit steppers preserve digit filtering, increments, bounds and step callbacks")
+            guard let item = units.itemArray.first(where: { ($0.representedObject as? String) == SizeUnit.MB.key }),
+                  let action = units.action else {
+                throw SettingsCheckError(message: "Missing production unit choice action")
+            }
+            units.select(item)
+            checks.check(NSApp.sendAction(action, to: units.target, from: item) && unitCallbacks[index] == [SizeUnit.MB.key],
+                         "the native unit menu dispatches the existing selected-unit callback")
+            input.updateValue(1024)
+            host.layoutSubtreeIfNeeded()
+            checks.check(field.stringValue == "1024" && abs(stepper.doubleValue - 10.24) < 0.000001 &&
+                         valueCallbacks[index] == [1024, 1, 42, 43] &&
+                         alignmentFrame(field, in: input).width + 0.6 >= expectedDigitWidth,
+                         "programmatic four-digit updates preserve numeric width without emitting an edit callback")
+        }
+    }
+}
+
 private func verifyWidgetSizingInputs(_ checks: Checks) throws {
     Store.shared.set(key: "CompactMenuBar", value: false)
     let widget = WidgetWrapper(.pieChart, title: "UIFixture", frame: NSRect(x: 0, y: 0, width: 22, height: 22))
@@ -618,6 +747,7 @@ private struct SettingsLayoutChecks {
                         try verifyActions(fixture, checks)
                         verifyExplicitModuleSections(checks)
                         verifyInsertedStackWidth(checks)
+                        try verifyUnitStepperLayout(checks)
                         try verifyWidgetSizingInputs(checks)
                     }
                 }

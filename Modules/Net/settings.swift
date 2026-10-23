@@ -139,14 +139,6 @@ internal class Settings: SettingsContainerView, Settings_v, NSTextFieldDelegate 
             $0.removeFromSuperview()
         }
         
-        self.addArrangedSubview(PreferencesSection([
-            PreferencesRow(localizedString("Number of top processes"), component: selectView(
-                action: #selector(self.changeNumberOfProcesses),
-                items: NumbersOfProcesses.map{ KeyValue_t(key: "\($0)", value: "\($0)") },
-                selected: "\(self.numberOfProcesses)"
-            ))
-        ]))
-        
         let interfaces = selectView(
             action: #selector(self.handleSelection),
             items: [],
@@ -174,18 +166,18 @@ internal class Settings: SettingsContainerView, Settings_v, NSTextFieldDelegate 
         }
         
         var prefs: [PreferencesRow] = [
-            PreferencesRow(localizedString("Reader type"), component: selectView(
+            PreferencesRow(localizedString("Traffic source"), component: selectView(
                 action: #selector(self.changeReaderType),
                 items: NetworkReaders,
                 selected: self.readerType
             )),
             PreferencesRow(localizedString("Network interface"), component: interfaces),
-            PreferencesRow(localizedString("Base"), component: selectView(
+            PreferencesRow(localizedString("Data format"), component: selectView(
                 action: #selector(self.toggleBase),
                 items: SpeedBase,
                 selected: self.baseValue
             )),
-            PreferencesRow(localizedString("Units"), component: selectView(
+            PreferencesRow(localizedString("Rate unit"), component: selectView(
                 action: #selector(self.toggleSpeedUnit),
                 items: NetworkSpeedUnits,
                 selected: self.speedUnitValue
@@ -211,7 +203,12 @@ internal class Settings: SettingsContainerView, Settings_v, NSTextFieldDelegate 
                 state: self.VPNModeState
             )))
         }
-        let section = PreferencesSection(prefs)
+        prefs.append(PreferencesRow(localizedString("Number of top processes"), component: selectView(
+            action: #selector(self.changeNumberOfProcesses),
+            items: NumbersOfProcesses.map{ KeyValue_t(key: "\($0)", value: "\($0)") },
+            selected: "\(self.numberOfProcesses)"
+        )))
+        let section = PreferencesSection(title: localizedString("Traffic"), prefs)
         section.setRowVisibility(1, newState: self.readerType == "interface")
         section.setRowVisibility(6, newState: self.publicIPState)
         self.addArrangedSubview(section)
@@ -236,8 +233,8 @@ internal class Settings: SettingsContainerView, Settings_v, NSTextFieldDelegate 
         
         let ICMPField = self.inputField(id: "ICMP", value: connectivityHost, placeholder: localizedString("Leave empty to disable the check"))
         self.connectivityHostField = ICMPField
-        self.addArrangedSubview(PreferencesSection([
-            PreferencesRow(localizedString("Reader type"), component: selectView(
+        self.addArrangedSubview(PreferencesSection(title: localizedString("Connectivity"), [
+            PreferencesRow(localizedString("Probe protocol"), component: selectView(
                 action: #selector(self.changeConnectivityMode),
                 items: [
                     KeyValue_t(key: "icmp", value: "ICMP"),

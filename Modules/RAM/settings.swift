@@ -87,20 +87,20 @@ internal class Settings: SettingsContainerView, Settings_v, NSTextFieldDelegate 
             $0.removeFromSuperview()
         }
         
-        self.addArrangedSubview(PreferencesSection([
+        self.addArrangedSubview(PreferencesSection(title: localizedString("Monitoring"), [
             PreferencesRow(localizedString("Update interval"), component: selectView(
                 action: #selector(self.changeUpdateInterval),
                 items: ReaderUpdateIntervals,
                 selected: "\(self.updateIntervalValue)"
-            )),
+            ))
+        ]))
+
+        self.addArrangedSubview(PreferencesSection(title: localizedString("Processes"), [
             PreferencesRow(localizedString("Update interval for top processes"), component: selectView(
                 action: #selector(self.changeUpdateTopInterval),
                 items: ReaderUpdateIntervals,
                 selected: "\(self.updateTopIntervalValue)"
-            ))
-        ]))
-        
-        self.addArrangedSubview(PreferencesSection([
+            )),
             PreferencesRow(localizedString("Combined processes"), component: switchView(
                 action: #selector(toggleCombinedProcesses),
                 state: self.combinedProcessesState

@@ -657,3 +657,15 @@
 "Choose which sensors appear in the menu bar." = "Choose which sensors appear in the menu bar.";
 "Menu bar widgets" = "Menu bar widgets";
 "Click to show or hide a widget. Drag to change its order." = "Click to show or hide a widget. Drag to change its order.";
+
+/* Device overview and monitoring groups */
+"Hardware" = "Hardware";
+"Device Information" = "Device Information";
+"Processes" = "Processes";
+"Traffic" = "Traffic";
+"Connectivity" = "Connectivity";
+"Traffic source" = "Traffic source";
+"Probe protocol" = "Probe protocol";
+"Data format" = "Data format";
+"Rate unit" = "Rate unit";
+"Transfer Rates" = "Transfer Rates";

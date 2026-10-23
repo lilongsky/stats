@@ -207,6 +207,26 @@ public extension PopupWrapper {
     }
 }
 
+private final class PopupSectionsScrollView: NSScrollView {
+    let scrollsInternally: Bool
+
+    init(scrollsInternally: Bool) {
+        self.scrollsInternally = scrollsInternally
+        super.init(frame: .zero)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func scrollWheel(with event: NSEvent) {
+        // A fully visible list has nothing to scroll. Let the surrounding
+        // settings page receive the same event instead of trapping it here.
+        if self.scrollsInternally {
+            super.scrollWheel(with: event)
+        } else {
+            self.nextResponder?.scrollWheel(with: event)
+        }
+    }
+}
+
 private final class PopupSectionsEditor: NSView, NSTableViewDataSource, NSTableViewDelegate {
     private weak var popup: PopupWrapper?
     private let table = NSTableView()
@@ -217,7 +237,7 @@ private final class PopupSectionsEditor: NSView, NSTableViewDataSource, NSTableV
         self.ids = popup.orderedSectionIDs()
         super.init(frame: .zero)
         self.identifier = NSUserInterfaceItemIdentifier("popup-section-editor")
-        let scroll = NSScrollView()
+        let scroll = PopupSectionsScrollView(scrollsInternally: self.ids.count > 8)
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.hasVerticalScroller = self.ids.count > 8
         scroll.borderType = .noBorder

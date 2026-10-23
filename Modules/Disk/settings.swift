@@ -87,28 +87,22 @@ internal class Settings: SettingsContainerView, Settings_v, NSTextFieldDelegate 
             $0.removeFromSuperview()
         }
         
-        self.addArrangedSubview(PreferencesSection([
-            PreferencesRow(localizedString("Update interval"), component: selectView(
-                action: #selector(self.changeUpdateInterval),
-                items: ReaderUpdateIntervals,
-                selected: "\(self.updateIntervalValue)"
-            ))
-        ]))
-        
-        self.addArrangedSubview(PreferencesSection([
-            PreferencesRow(localizedString("Number of top processes"), component: selectView(
-                action: #selector(self.changeNumberOfProcesses),
-                items: NumbersOfProcesses.map{ KeyValue_t(key: "\($0)", value: "\($0)") },
-                selected: "\(self.numberOfProcesses)"
-            ))
-        ]))
-        
         self.button = selectView(
             action: #selector(self.handleSelection),
             items: [],
             selected: ""
         )
-        self.addArrangedSubview(PreferencesSection([
+        self.addArrangedSubview(PreferencesSection(title: localizedString("Monitoring"), [
+            PreferencesRow(localizedString("Update interval"), component: selectView(
+                action: #selector(self.changeUpdateInterval),
+                items: ReaderUpdateIntervals,
+                selected: "\(self.updateIntervalValue)"
+            )),
+            PreferencesRow(localizedString("Number of top processes"), component: selectView(
+                action: #selector(self.changeNumberOfProcesses),
+                items: NumbersOfProcesses.map{ KeyValue_t(key: "\($0)", value: "\($0)") },
+                selected: "\(self.numberOfProcesses)"
+            )),
             PreferencesRow(localizedString("Disk to show"), component: self.button!),
             PreferencesRow(localizedString("Show removable disks"), component: switchView(
                 action: #selector(self.toggleRemovable),
@@ -117,13 +111,13 @@ internal class Settings: SettingsContainerView, Settings_v, NSTextFieldDelegate 
         ]))
         
         if widgets.contains(where: { $0 == .speed }) {
-            self.addArrangedSubview(PreferencesSection([
-                PreferencesRow(localizedString("Base"), component: selectView(
+            self.addArrangedSubview(PreferencesSection(title: localizedString("Transfer Rates"), [
+                PreferencesRow(localizedString("Data format"), component: selectView(
                     action: #selector(self.toggleBase),
                     items: SpeedBase,
                     selected: self.baseValue
                 )),
-                PreferencesRow(localizedString("Units"), component: selectView(
+                PreferencesRow(localizedString("Rate unit"), component: selectView(
                     action: #selector(self.toggleSpeedUnit),
                     items: NetworkSpeedUnits,
                     selected: self.speedUnitValue
