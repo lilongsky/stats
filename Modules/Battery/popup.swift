@@ -14,6 +14,7 @@ import Kit
 
 internal class Popup: PopupWrapper {
     private let dashboardHeight: CGFloat = 160
+    private let healthHeight: CGFloat = 52
     
     private var dashboardBatteryView: BatteryView = BatteryView()
     private var dashboardBatteryStatus: BatteryStatus = BatteryStatus()
@@ -26,7 +27,6 @@ internal class Popup: PopupWrapper {
     private var currentField: NSTextField? = nil
     private var voltageField: NSTextField? = nil
     
-    private var batterySection: NSView? = nil
     private var barView: BarChartView = BarChartView(size: 10, horizontal: true)
     private var maxCapacityField: NSTextField? = nil
     private var designedCapacityField: NSTextField? = nil
@@ -65,6 +65,7 @@ internal class Popup: PopupWrapper {
         self.addPopupSection(self.initDashboard(), id: "dashboard", title: "电量概览")
         self.addPopupSection(self.initDetails(), id: "details", title: "详细信息")
         self.addPopupSection(self.initBattery(), id: "battery", title: "电池健康")
+        self.addPopupSection(self.initAdapterPlaceholder(), id: "adapter", title: "Power adapter")
         self.addPopupSection(self.initProcesses(), id: "processes", title: "耗电进程")
         
         self.recalculateHeight()
@@ -83,18 +84,23 @@ internal class Popup: PopupWrapper {
     }
     
     private func recalculateHeight() {
-        var h: CGFloat = 0
-        self.arrangedSubviews.forEach { v in
-            if let v = v as? NSStackView {
-                h += v.arrangedSubviews.map({ $0.fittingSize.height }).reduce(0, +)
-            } else {
-                h += v.fittingSize.height
-            }
-        }
-        if self.frame.size.height != h {
-            self.setFrameSize(NSSize(width: self.frame.width, height: h))
-            self.sizeCallback?(self.frame.size)
-        }
+        let previousSize = self.frame.size
+        let size = self.applySectionLayout()
+        if previousSize != size { self.sizeCallback?(size) }
+    }
+
+    private func rowsSection(_ title: String, height: CGFloat) -> (NSView, NSStackView) {
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: height))
+        view.heightAnchor.constraint(equalToConstant: height).isActive = true
+        let separator = separatorView(localizedString(title), origin: NSPoint(
+            x: 0, y: height - Constants.Popup.separatorHeight
+        ), width: view.frame.width)
+        let rows = NSStackView(frame: NSRect(x: 0, y: 0, width: view.frame.width, height: separator.frame.minY))
+        rows.orientation = .vertical
+        rows.spacing = 0
+        view.addSubview(separator)
+        view.addSubview(rows)
+        return (view, rows)
     }
     
     private func initDashboard() -> NSView {
@@ -150,14 +156,11 @@ internal class Popup: PopupWrapper {
     }
     
     private func initDetails() -> NSView {
-        let view = NSStackView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: 0))
-        view.orientation = .vertical
-        view.spacing = 0
-        view.addArrangedSubview(SeparatorView(label: localizedString("Details")))
+        let (view, rows) = self.rowsSection("Details", height: Constants.Popup.separatorHeight + 2 * 22)
         
-        self.sourceField = popupRow(view, title: "\(localizedString("Source")):", value: localizedString("Unknown")).1
+        self.sourceField = popupRow(rows, title: "\(localizedString("Source")):", value: localizedString("Unknown")).1
         
-        let time = popupRow(view, title: "\(localizedString("Time to discharge")):", value: localizedString("Unknown"))
+        let time = popupRow(rows, title: "\(localizedString("Time to discharge")):", value: localizedString("Unknown"))
         self.timeLabelField = time.0
         self.timeField = time.1
         
@@ -165,25 +168,25 @@ internal class Popup: PopupWrapper {
     }
     
     private func initBattery() -> NSView {
-        let view = NSStackView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: 0))
-        view.orientation = .vertical
-        view.spacing = 0
-        view.addArrangedSubview(SeparatorView(label: localizedString("Battery")))
+        let (view, rows) = self.rowsSection("Battery", height: Constants.Popup.separatorHeight + self.healthHeight + 6 * 22)
         
         let health: NSStackView = {
-            let view = NSStackView()
+            let view = NSStackView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: self.healthHeight))
+            view.heightAnchor.constraint(equalToConstant: self.healthHeight).isActive = true
             view.orientation = .vertical
             view.spacing = 8
             view.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 10, right: 0)
             
             let capacity: NSStackView = {
-                let rows = NSStackView()
+                let rows = NSStackView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: 24))
+                rows.heightAnchor.constraint(equalToConstant: 24).isActive = true
                 rows.orientation = .vertical
                 rows.spacing = 0
                 rows.distribution = .fill
                 
                 let labels: NSStackView = {
-                    let row = NSStackView()
+                    let row = NSStackView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: 10))
+                    row.heightAnchor.constraint(equalToConstant: 10).isActive = true
                     row.orientation = .horizontal
                     row.distribution = .fill
                     row.spacing = 0
@@ -202,7 +205,8 @@ internal class Popup: PopupWrapper {
                 }()
                 
                 let values: NSStackView = {
-                    let row = NSStackView()
+                    let row = NSStackView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: 14))
+                    row.heightAnchor.constraint(equalToConstant: 14).isActive = true
                     row.orientation = .horizontal
                     row.distribution = .fill
                     row.spacing = 0
@@ -234,42 +238,52 @@ internal class Popup: PopupWrapper {
             
             view.addArrangedSubview(capacity)
             view.addArrangedSubview(self.barView)
+            capacity.widthAnchor.constraint(equalTo: view.widthAnchor).isActive = true
+            self.barView.widthAnchor.constraint(equalTo: view.widthAnchor).isActive = true
+            self.barView.heightAnchor.constraint(equalToConstant: 10).isActive = true
             
             return view
         }()
         
-        view.addArrangedSubview(health)
+        rows.addArrangedSubview(health)
+        health.widthAnchor.constraint(equalTo: rows.widthAnchor).isActive = true
         
-        self.powerField = popupRow(view, title: "\(localizedString("Power")):", value: "0 W").1
-        self.currentField = popupRow(view, title: "\(localizedString("Current")):", value: "0 mA").1
-        self.voltageField = popupRow(view, title: "\(localizedString("Voltage")):", value: "0 V").1
-        self.healthField = popupRow(view, title: "\(localizedString("Health")):", value: "").1
-        self.cyclesField = popupRow(view, title: "\(localizedString("Cycles")):", value: "").1
-        self.temperatureField = popupRow(view, title: "\(localizedString("Temperature")):", value: "").1
-        
-        self.batterySection = view
+        self.powerField = popupRow(rows, title: "\(localizedString("Power")):", value: "0 W").1
+        self.currentField = popupRow(rows, title: "\(localizedString("Current")):", value: "0 mA").1
+        self.voltageField = popupRow(rows, title: "\(localizedString("Voltage")):", value: "0 V").1
+        self.healthField = popupRow(rows, title: "\(localizedString("Health")):", value: "").1
+        self.cyclesField = popupRow(rows, title: "\(localizedString("Cycles")):", value: "").1
+        self.temperatureField = popupRow(rows, title: "\(localizedString("Temperature")):", value: "").1
         
         return view
     }
     
     private func initAdapter() -> NSView {
-        let view = NSStackView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: 0))
-        view.orientation = .vertical
-        view.spacing = 0
-        view.addArrangedSubview(SeparatorView(label: localizedString("Power adapter")))
+        let (view, rows) = self.rowsSection("Power adapter", height: Constants.Popup.separatorHeight + 4 * 22)
         
-        self.chargingStateField = popupBadgeRow(view, title: "\(localizedString("Is charging")):", ok: "Yes", notOk: "No").1
-        self.adapterPowerField = popupRow(view, title: "\(localizedString("Power")):", value: "0 W").1
-        self.adapterCurrentField = popupRow(view, title: "\(localizedString("Current")):", value: "0 mA").1
-        self.adapterVoltageField = popupRow(view, title: "\(localizedString("Voltage")):", value: "0 V").1
+        self.chargingStateField = popupBadgeRow(rows, title: "\(localizedString("Is charging")):", ok: "Yes", notOk: "No").1
+        self.adapterPowerField = popupRow(rows, title: "\(localizedString("Power")):", value: "0 W").1
+        self.adapterCurrentField = popupRow(rows, title: "\(localizedString("Current")):", value: "0 mA").1
+        self.adapterVoltageField = popupRow(rows, title: "\(localizedString("Voltage")):", value: "0 V").1
         
         self.adapterView = view
         
         return view
     }
+
+    private func initAdapterPlaceholder() -> NSView {
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: 0))
+        view.heightAnchor.constraint(equalToConstant: 0).isActive = true
+        return view
+    }
     
     private func initProcesses() -> NSView {
-        if self.numberOfProcesses == 0 { return NSView() }
+        if self.numberOfProcesses == 0 {
+            let view = NSView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: 0))
+            view.heightAnchor.constraint(equalToConstant: 0).isActive = true
+            self.processesView = view
+            return view
+        }
         
         let view: NSView = NSView(frame: NSRect(x: 0, y: 0, width: self.frame.width, height: self.processesHeight))
         view.heightAnchor.constraint(equalToConstant: view.bounds.height).isActive = true
@@ -312,6 +326,7 @@ internal class Popup: PopupWrapper {
             if self.adapterView != nil {
                 self.adapterView?.removeFromSuperview()
                 self.adapterView = nil
+                self.addPopupSection(self.initAdapterPlaceholder(), id: "adapter", title: "Power adapter")
                 self.recalculateHeight()
             }
         } else {
@@ -323,11 +338,8 @@ internal class Popup: PopupWrapper {
             }
             
             if self.adapterView == nil {
-                var index: Int = 3
-                if let section = self.batterySection, let i = self.arrangedSubviews.firstIndex(of: section) {
-                    index = i + 1
-                }
-                self.insertArrangedSubview(self.initAdapter(), at: index)
+                self.popupSection("adapter")?.removeFromSuperview()
+                self.addPopupSection(self.initAdapter(), id: "adapter", title: "Power adapter", before: "processes")
                 self.recalculateHeight()
             }
             

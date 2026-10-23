@@ -81,15 +81,16 @@ internal class Popup: PopupWrapper {
         let render = NSView(frame: NSRect(x: (usageX - 50)/2, y: (view.frame.height - 50)/2 - 3, width: 50, height: 50))
         let tiler = NSView(frame: NSRect(x: (usageX+usageSize) + (usageX - 50)/2, y: 0, width: 50, height: self.dashboardHeight))
         
-        self.usageCircle = PieChartView(frame: NSRect(x: 0, y: 0, width: usage.frame.width, height: usage.frame.height), drawValue: true)
+        // A whole-chart fade blends the previous and current percentage text.
+        self.usageCircle = PieChartView(frame: NSRect(x: 0, y: 0, width: usage.frame.width, height: usage.frame.height), drawValue: true, animation: false)
         self.usageCircle!.toolTip = localizedString("Utilization")
         usage.addSubview(self.usageCircle!)
         
-        self.renderCircle = PieChartView(frame: NSRect(x: 0, y: 0, width: render.frame.width, height: render.frame.height), drawValue: true)
+        self.renderCircle = PieChartView(frame: NSRect(x: 0, y: 0, width: render.frame.width, height: render.frame.height), drawValue: true, animation: false)
         self.renderCircle!.toolTip = localizedString("Renderer utilization")
         render.addSubview(self.renderCircle!)
         
-        self.tilerCircle = PieChartView(frame: NSRect(x: 0, y: 0, width: tiler.frame.width, height: tiler.frame.height), drawValue: true)
+        self.tilerCircle = PieChartView(frame: NSRect(x: 0, y: 0, width: tiler.frame.width, height: tiler.frame.height), drawValue: true, animation: false)
         self.tilerCircle!.toolTip = localizedString("Tiler utilization")
         tiler.addSubview(self.tilerCircle!)
         

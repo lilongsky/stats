@@ -150,6 +150,8 @@ python3 Tests/run-dashboard-checks.py --output-dir build/dashboard-evidence
 python3 Tests/run-dashboard-checks.py --output-dir build/dashboard-evidence-en --locale en_US --language en
 python3 Tests/run-popup-scroll-checks.py
 python3 Tests/run-cpu-popup-checks.py
+python3 Tests/run-clock-settings-checks.py --output-dir build/clock-settings-evidence
+python3 Tests/run-battery-popup-checks.py --language zh-Hans en
 python3 Tests/run-calendar-checks.py
 python3 Tests/run-calendar-gestures.py
 python3 Tests/run-calendar-performance.py
@@ -195,7 +197,14 @@ English. Each language exports 40 isolated previews. The checks include the
 shortcut recorder button inside its composite control and a compact duration
 editor, in addition to card and row alignment. Dashboard checks pass 1,381 assertions per language; popup scroll routing passes
 26. CPU popup checks pass 96 assertions and calendar checks pass 320 against the
-same rebuilt Kit.
+same rebuilt Kit: 6,742 assertions in that regression group. That group was not
+rerun in the final UI pass because Kit did not change. The later Clock settings
+check passes 211 assertions in Chinese across multiple widths and light/dark
+appearance, including the existing callbacks. A one-time GPU popup probe passes
+35 checks for the percentage-transition fix. Battery popup checks pass 251
+assertions in Chinese and 251 in English (502 total) in isolated light/dark
+views. GPU, Battery and Clock also passed post-fix live review in the rebuilt
+app; the matrix records the tested states and remaining coverage limits.
 
 The CPU popup regression check compiles the real production popup in a hidden
 AppKit window with isolated preferences. It covers late frequency arrival,
@@ -205,14 +214,26 @@ and defaults to the position before top processes. Its zero-height placeholder
 also makes it configurable before the first telemetry sample. The helper waits
 for callback completion instead of assuming a fixed run-loop delay.
 
-A live Simplified Chinese light-appearance review of the deployed bundle checked
-General, Sensors module, popup and notification settings, and CPU widget
-settings. It also checked Module, Widgets, Popup and Notifications for GPU, RAM,
-Disk and Net: 16 panes in total. Groups fill the form width, labels and controls
-do not overlap, and the tops and bottoms of long Widgets and Popup pages remain
-reachable. The Dashboard was checked at both ends of its scroll range in a
-760 × 540 window: groups fill the viewport, labels remain horizontal and long
-values wrap.
+A live Simplified Chinese light-appearance review checked the Dashboard,
+General, the available module settings pages and actual menu-bar popups listed
+in the [UI coverage matrix](Tests/ui-validation.md). A Popup settings tab and
+the module's actual popup are recorded separately. CPU, GPU, RAM, Disk and Net
+have each had all four settings pages reviewed. CPU and Net actual popups were
+checked at both ends of their scroll range; RAM and Disk actual popups were
+also reviewed. The Dashboard was checked at both ends in a 760 × 540 window:
+groups fill the viewport, labels remain horizontal and long values wrap.
+
+The broader review found three issues: percentage crossfades in the GPU popup,
+overlapping Battery popup content, and a clipped enabled column in Clock
+settings. The rebuilt app's live review confirms clean updates in all three GPU
+circles, nonoverlapping Battery adapter/health/details sections and a fixed
+footer, and all five Clock columns with both enabled checkboxes visible at
+760 × 540. Clock rows also use a more compact height. Bluetooth coverage is
+limited to the visible disabled/no-device state; Remote coverage is limited to
+its unauthenticated settings page. Sensors Widgets was checked with no active
+widget. The matrix also records dialog cancellation and the History
+interactions actually tested. First-launch setup, update/install flows,
+authenticated Remote operation and hardware actions remain outside this review.
 
 Scrolling over the formerly trapped GPU popup-section list now moves the outer
 settings page; reversing the scroll restores its original position. The disabled
@@ -226,8 +247,10 @@ monitoring continues, and Command-Q exits. The settings/preview button retains
 the correct state after closing and reopening the window. The running app has
 one Compact process and seven independent menu items. The live review covers
 Simplified Chinese in light appearance; English/Simplified Chinese, light/dark
-and three-width coverage comes from the offscreen checks described above. Use
-the README checklist to validate the installed version on the target Mac.
+and multiple-width coverage comes from the offscreen checks described above,
+within each runner's stated scope. Apple Human Interface Guidelines informed
+the design; this is not Apple certification. Use the README checklist to
+validate the installed version on the target Mac.
 
 ## Implementation provenance and contribution policy
 

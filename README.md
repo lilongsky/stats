@@ -170,7 +170,7 @@ For development after a Clock-only change, `python3 build-local.py --only Clock 
 
 ### Check the installation and handle failures
 
-The latest live review covered the Dashboard and all 16 Module, Widgets, Popup and Notifications panes across GPU, RAM, Disk and Net in Simplified Chinese with light appearance. The related automated suites pass 6,742 assertions; English/Simplified Chinese, light/dark and three-width coverage is offscreen. See [validation scope](FORK.md#validation) for details.
+The currently available main UI has been reviewed in Simplified Chinese with light appearance, within the limits in the [UI coverage matrix](Tests/ui-validation.md). The rebuilt app passed live rechecks of GPU percentage updates, Battery popup layout and the Clock table's enabled column. English/Simplified Chinese, light/dark and multiple-width automated coverage is offscreen; see [validation scope](FORK.md#validation) for results and limits.
 
 - Confirm that preflight prints `Signature verified; Gatekeeper allows:` for `~/Applications/Stats Compact.app`, then launch through the guarded command.
 - Check that menu items remain independently movable and configurable, including CPU/GPU graphs, pie size and spacing. Check live data and the CPU popup after frequency samples arrive, section reordering and process-count changes; sections should remain separate.
