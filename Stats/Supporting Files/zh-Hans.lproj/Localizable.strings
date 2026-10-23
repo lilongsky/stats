@@ -669,3 +669,10 @@
 "Data format" = "数据计量方式";
 "Rate unit" = "速率单位";
 "Transfer Rates" = "传输速率";
+
+/* Transfer display choices */
+"Byte" = "字节";
+"Bit" = "比特";
+"Auto" = "自动";
+"Upload speed" = "上传速度";
+"Download speed" = "下载速度";

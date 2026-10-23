@@ -170,6 +170,8 @@ For development after a Clock-only change, `python3 build-local.py --only Clock 
 
 ### Check the installation and handle failures
 
+The latest live review covered the Dashboard and all 16 Module, Widgets, Popup and Notifications panes across GPU, RAM, Disk and Net in Simplified Chinese with light appearance. The related automated suites pass 6,742 assertions; English/Simplified Chinese, light/dark and three-width coverage is offscreen. See [validation scope](FORK.md#validation) for details.
+
 - Confirm that preflight prints `Signature verified; Gatekeeper allows:` for `~/Applications/Stats Compact.app`, then launch through the guarded command.
 - Check that menu items remain independently movable and configurable, including CPU/GPU graphs, pie size and spacing. Check live data and the CPU popup after frequency samples arrive, section reordering and process-count changes; sections should remain separate.
 - Open the Dashboard, General, GPU, memory, disk, network and Sensors settings, switch module panes and use keyboard navigation in the sidebar. Check that every settings group fills the same form width, labels and controls remain separate, and the widget-style selector appears only in Widgets. Scroll over the popup-section list in both directions and check numeric thresholds with unit selectors. Dashboard labels should remain horizontal and long values should wrap. Fan preferences should match the detected hardware.

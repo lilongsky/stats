@@ -205,15 +205,29 @@ and defaults to the position before top processes. Its zero-height placeholder
 also makes it configurable before the first telemetry sample. The helper waits
 for callback completion instead of assuming a fixed run-loop delay.
 
-A live Chinese light-appearance review of the deployed bundle checked General,
-Sensors module, popup and notification settings, and CPU widget settings. Cards
-share their form edges; the shortcut recorder and compact duration editor align
-on the right. Command-comma opens general settings, Command-W closes the window
-while monitoring continues, and Command-Q exits. The settings/preview button
-retains the correct state after closing and reopening the window. The running
-app has one Compact process and seven independent menu items. These live checks
-do not establish the appearance of every pane on every macOS release; use the
-README checklist on the target Mac.
+A live Simplified Chinese light-appearance review of the deployed bundle checked
+General, Sensors module, popup and notification settings, and CPU widget
+settings. It also checked Module, Widgets, Popup and Notifications for GPU, RAM,
+Disk and Net: 16 panes in total. Groups fill the form width, labels and controls
+do not overlap, and the tops and bottoms of long Widgets and Popup pages remain
+reachable. The Dashboard was checked at both ends of its scroll range in a
+760 × 540 window: groups fill the viewport, labels remain horizontal and long
+values wrap.
+
+Scrolling over the formerly trapped GPU popup-section list now moves the outer
+settings page; reversing the scroll restores its original position. The disabled
+RAM Swap and Net threshold controls keep the switch, number, stepper and unit
+separate. Enabled threshold states are covered by the isolated production-view
+tests, without enabling notifications in the user's preferences.
+
+The shortcut recorder and compact duration editor align on the right.
+Command-comma opens general settings, Command-W closes the window while
+monitoring continues, and Command-Q exits. The settings/preview button retains
+the correct state after closing and reopening the window. The running app has
+one Compact process and seven independent menu items. The live review covers
+Simplified Chinese in light appearance; English/Simplified Chinese, light/dark
+and three-width coverage comes from the offscreen checks described above. Use
+the README checklist to validate the installed version on the target Mac.
 
 ## Implementation provenance and contribution policy
 

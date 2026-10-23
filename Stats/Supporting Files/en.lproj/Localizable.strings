@@ -669,3 +669,10 @@
 "Data format" = "Data format";
 "Rate unit" = "Rate unit";
 "Transfer Rates" = "Transfer Rates";
+
+/* Transfer display choices */
+"Byte" = "Byte";
+"Bit" = "Bit";
+"Auto" = "Auto";
+"Upload speed" = "Upload speed";
+"Download speed" = "Download speed";
