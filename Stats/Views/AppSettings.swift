@@ -12,7 +12,7 @@
 import Cocoa
 import Kit
 
-class ApplicationSettings: NSStackView {
+class ApplicationSettings: NSView {
     private var updateIntervalValue: String {
         Store.shared.string(key: "update-interval", defaultValue: AppUpdateInterval.silent.rawValue)
     }
@@ -92,6 +92,7 @@ class ApplicationSettings: NSStackView {
         self.translatesAutoresizingMaskIntoConstraints = false
         
         let scrollView = ScrollableStackView(orientation: .vertical)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.stackView.edgeInsets = NSEdgeInsets(
             top: 0,
             left: Constants.Settings.margin,
@@ -160,7 +161,14 @@ class ApplicationSettings: NSStackView {
                 action: #selector(self.toggleCombinedModulesIcon),
                 state: self.combinedModulesIcon
             )),
-            PreferencesRow(component: self.moduleSelector),
+            PreferencesRow(component: {
+                let row = NSStackView()
+                row.orientation = .horizontal
+                row.spacing = 0
+                row.addArrangedSubview(self.moduleSelector)
+                row.addArrangedSubview(NSView())
+                return row
+            }()),
             PreferencesRow(localizedString("Spacing"), component: selectView(
                 action: #selector(self.toggleCombinedModulesSpacing),
                 items: CombinedModulesSpacings,
@@ -232,7 +240,13 @@ class ApplicationSettings: NSStackView {
         ])
         scrollView.stackView.addArrangedSubview(self.fanHelperView!)
         
-        self.addArrangedSubview(scrollView)
+        self.addSubview(scrollView)
+        NSLayoutConstraint.activate([
+            scrollView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: self.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: self.bottomAnchor)
+        ])
         
         let CPUeButton = buttonView(#selector(self.toggleCPUeStressTest), text: localizedString("Run"))
         let CPUpButton = buttonView(#selector(self.toggleCPUpStressTest), text: localizedString("Run"))

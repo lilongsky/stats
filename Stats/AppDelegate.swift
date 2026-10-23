@@ -62,6 +62,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     
     static func main() {
         let launchStart = Date()
+        // Different development/install paths can share the Compact identity.
+        // Reuse the earliest instance before readers or settings are created.
+        if Bundle.main.bundleIdentifier == "eu.exelban.Stats.Compact" {
+            let current = NSRunningApplication.current
+            let candidates = NSRunningApplication.runningApplications(withBundleIdentifier: "eu.exelban.Stats.Compact") + [current]
+            let first = candidates.filter { !$0.isTerminated }.min { lhs, rhs in
+                let leftDate = lhs.launchDate ?? .distantFuture
+                let rightDate = rhs.launchDate ?? .distantFuture
+                if leftDate != rightDate { return leftDate < rightDate }
+                return lhs.processIdentifier < rhs.processIdentifier
+            }
+            if let first, first.processIdentifier != current.processIdentifier {
+                print("Stats Compact is already running; using the existing instance.")
+                first.activate(options: [.activateIgnoringOtherApps])
+                return
+            }
+        }
         // The separately named local build can run beside the installed Stats.
         if Bundle.main.bundleIdentifier == "eu.exelban.Stats.Compact" {
             let defaults = UserDefaults.standard

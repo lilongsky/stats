@@ -1708,6 +1708,13 @@ public class PreferencesSection: NSStackView {
     private let container: NSStackView = NSStackView()
     private var subtitleField: NSTextField?
 
+    public override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        if let stack = self.superview as? NSStackView {
+            fillSettingsWidth(self, in: stack)
+        }
+    }
+
     public init(title: String = "", subtitle: String = "", id: String? = nil, _ components: [NSView] = []) {
         super.init(frame: .zero)
         

@@ -383,6 +383,55 @@ private func verifyActions(_ fixture: SettingsFixture, _ checks: Checks) throws 
                  "restoring a section restores the popup height")
 }
 
+private func verifyOrdinaryModuleSections(_ checks: Checks) {
+    let host = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 300))
+    let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    defer { window.close() }
+    // Match CPU.Settings: an ordinary vertical gravityAreas stack, default
+    // alignment and zero inner insets; its outer settings host supplies margins.
+    let stack = NSStackView()
+    stack.orientation = .vertical
+    stack.distribution = .gravityAreas
+    stack.spacing = Constants.Settings.margin
+    stack.translatesAutoresizingMaskIntoConstraints = false
+    host.addSubview(stack)
+    NSLayoutConstraint.activate([
+        stack.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+        stack.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+        stack.topAnchor.constraint(equalTo: host.topAnchor),
+        stack.bottomAnchor.constraint(equalTo: host.bottomAnchor)
+    ])
+    let titles = [localizedString("Update interval"), localizedString("Update interval for top processes"),
+                  localizedString("Number of top processes")]
+    let choices = [LocalChoice(["1 second", "5 seconds"], selected: 0) { _ in },
+                   LocalChoice(["1 second", "10 seconds"], selected: 1) { _ in },
+                   LocalChoice(["0", "8", "20"], selected: 1) { _ in }]
+    let rows = zip(titles, choices).map { PreferencesRow($0.0, component: $0.1) }
+    let cards = [PreferencesSection(Array(rows.prefix(2))), PreferencesSection([rows[2]])]
+    cards.forEach { stack.addArrangedSubview($0) }
+    host.layoutSubtreeIfNeeded()
+    stack.layoutSubtreeIfNeeded()
+    let usable = stack.bounds.insetBy(dx: stack.edgeInsets.left, dy: 0)
+    let cardFrames = cards.map { $0.convert($0.bounds, to: stack) }
+    checks.check(cardFrames.allSatisfy {
+        abs($0.minX - usable.minX) < 0.6 && abs($0.maxX - usable.maxX) < 0.6 && abs($0.width - 520) < 0.6
+    }, "ordinary 520pt module stacks automatically give differently sized settings cards matching left and right edges")
+    let trailingEdges = choices.map { alignmentFrame($0, in: stack).maxX }
+    checks.check(rows.indices.allSatisfy { index in
+        let row = rows[index], control = choices[index], card = cards[index < 2 ? 0 : 1]
+        let labels = descendants(row).compactMap { $0 as? NSTextField }.filter { !$0.stringValue.isEmpty }
+        let controlRect = control.convert(control.bounds, to: card)
+        let text = row.arrangedSubviews[0].convert(row.arrangedSubviews[0].bounds, to: row)
+        return visible(control) && control.selectedItem != nil && !controlRect.isEmpty &&
+            card.bounds.insetBy(dx: -0.6, dy: -0.6).contains(controlRect) && !labels.isEmpty &&
+            labels.allSatisfy { visible($0) && !$0.bounds.isEmpty &&
+                card.bounds.insetBy(dx: -0.6, dy: -0.6).contains($0.convert($0.bounds, to: card)) } &&
+            !overlaps(text, control.convert(control.bounds, to: row)) && abs(trailingEdges[index] - trailingEdges[0]) < 0.6
+    }, "ordinary module cards keep their real labels and native selectors visible, aligned and free of overlap")
+}
+
 private func verifyInsertedStackWidth(_ checks: Checks) {
     let host = NSView(frame: NSRect(x: 0, y: 0, width: 180, height: 240))
     let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
@@ -568,6 +617,7 @@ private struct SettingsLayoutChecks {
                     verifySectionAPIs(fixture, checks)
                     if width == 540 {
                         try verifyActions(fixture, checks)
+                        verifyOrdinaryModuleSections(checks)
                         verifyInsertedStackWidth(checks)
                         try verifyWidgetSizingInputs(checks)
                     }

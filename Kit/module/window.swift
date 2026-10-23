@@ -99,16 +99,18 @@ open class Window: NSStackView {
         self.orientation = .vertical
         self.alignment = .leading
         self.distribution = .fill
-        self.setHuggingPriority(.required, for: .horizontal)
+        self.setHuggingPriority(.defaultLow, for: .horizontal)
         self.spacing = Constants.Settings.margin
         
         let settingsView = self.settings()
         self.settingsView = settingsView
         self.addArrangedSubview(settingsView)
+        fillSettingsWidth(settingsView, in: self)
         
         if self.isPreviewAvailable, let previewView = self.preview() {
             settingsView.isHidden = true
             self.addArrangedSubview(previewView)
+            fillSettingsWidth(previewView, in: self)
             self.previewView = previewView
         }
         
@@ -151,6 +153,7 @@ open class Window: NSStackView {
     private func settings() -> NSView {
         let view = NSStackView()
         view.orientation = .vertical
+        view.alignment = .leading
         view.spacing = Constants.Settings.margin
         view.edgeInsets = NSEdgeInsets(
             top: 0,
@@ -164,10 +167,12 @@ open class Window: NSStackView {
             self.widgetSelector = widgetSelector
             
             view.addArrangedSubview(widgetSelector)
+            fillSettingsWidth(widgetSelector, in: view)
             
             if let settingsView = self.moduleSettings {
                 settingsView.load(widgets: self.widgets.filter { $0.isActive }.map { $0.type })
                 view.addArrangedSubview(settingsView)
+                fillSettingsWidth(settingsView, in: view)
             }
             
             return view
@@ -198,15 +203,10 @@ open class Window: NSStackView {
         let moduleTab: NSTabViewItem = NSTabViewItem()
         moduleTab.label = localizedString("Module")
         moduleTab.view = {
-            let container = NSStackView()
-            container.translatesAutoresizingMaskIntoConstraints = false
-            
             let scrollView = ScrollableStackView()
             self.moduleSettingsContainer = scrollView.stackView
             self.loadModuleSettings()
-            
-            container.addArrangedSubview(scrollView)
-            return container
+            return scrollView
         }()
         tabView.addTabViewItem(moduleTab)
         
@@ -252,6 +252,7 @@ open class Window: NSStackView {
         view.addArrangedSubview(widgetSelector)
         view.addArrangedSubview(segmentedControl)
         view.addArrangedSubview(tabView)
+        for child in view.arrangedSubviews { fillSettingsWidth(child, in: view) }
         
         return view
     }

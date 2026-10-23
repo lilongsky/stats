@@ -11,20 +11,43 @@ private extension Popup {
         let expected = visible.reduce(CGFloat(0)) {
             $0 + (expectedHeights[String(($1.identifier?.rawValue ?? "").dropFirst("popup-section:".count))] ?? 0)
         }
-        check(abs(self.frame.height - expected) < 0.5, "\(label): document height includes every visible section")
-        check(self.arrangedSubviews.allSatisfy { $0.identifier?.rawValue.hasPrefix("popup-section:") == true },
+        var diagnosed = false
+        func verify(_ condition: Bool, _ message: String) {
+            if !condition && !diagnosed {
+                diagnosed = true
+                print("LAYOUT \(label): document=\(self.frame), bounds=\(self.bounds), expectedHeight=\(expected), " +
+                      "requestedProcesses=\(self.numberOfProcesses), actualProcesses=\(self.processes?.count ?? 0), " +
+                      "frequency=\(self.coresFreqField?.stringValue ?? "unavailable")")
+                for view in self.arrangedSubviews {
+                    let id = String((view.identifier?.rawValue ?? "").dropFirst("popup-section:".count))
+                    print("SECTION \(id): hidden=\(view.isHidden), frame=\(view.frame), expectedHeight=\(expectedHeights[id] ?? -1)")
+                }
+            }
+            check(condition, message)
+        }
+        verify(abs(self.frame.height - expected) < 0.5, "\(label): document height includes every visible section")
+        verify(self.arrangedSubviews.allSatisfy { $0.identifier?.rawValue.hasPrefix("popup-section:") == true },
               "\(label): every CPU section participates in customization")
-        check(visible.allSatisfy {
+        verify(visible.allSatisfy {
             let id = String(($0.identifier?.rawValue ?? "").dropFirst("popup-section:".count))
             return abs($0.frame.height - (expectedHeights[id] ?? -1)) < 0.5
         }, "\(label): sections retain their content heights")
         let byPosition = visible.filter { $0.frame.height > 0 }.sorted { $0.frame.minY < $1.frame.minY }
-        check(zip(byPosition, byPosition.dropFirst()).allSatisfy { abs($0.frame.maxY - $1.frame.minY) < 0.5 },
+        verify(zip(byPosition, byPosition.dropFirst()).allSatisfy { abs($0.frame.maxY - $1.frame.minY) < 0.5 },
               "\(label): adjacent sections have no gaps or overlaps")
-        check(byPosition.allSatisfy { $0.frame.minY >= -0.5 && $0.frame.maxY <= self.bounds.maxY + 0.5 },
+        verify(byPosition.allSatisfy { $0.frame.minY >= -0.5 && $0.frame.maxY <= self.bounds.maxY + 0.5 },
               "\(label): all sections fit inside the scroll document")
-        check(abs((byPosition.last?.frame.maxY ?? 0) - self.bounds.maxY) < 0.5,
+        verify(abs((byPosition.last?.frame.maxY ?? 0) - self.bounds.maxY) < 0.5,
               "\(label): no blank area above the content")
+    }
+
+    func hasRenderedFrequency(_ value: Int) -> Bool {
+        self.frequencyCache.initialized && self.coresFreqField?.stringValue == "\(value) MHz"
+    }
+
+    func hasProcessRows(_ count: Int) -> Bool {
+        self.processesView != nil && self.processesView === self.popupSection("processes") &&
+            (self.processes?.count ?? 0) == count
     }
 }
 
@@ -60,7 +83,24 @@ private struct CPUPopupLayoutChecks {
             checks += 1
             if !condition { failures += 1; print("FAIL: \(label)") }
         }
-        func drain() { RunLoop.current.run(until: Date().addingTimeInterval(0.02)) }
+        func awaitMainUpdate(_ label: String, until ready: () -> Bool) {
+            let deadline = Date().addingTimeInterval(3)
+            let marker = DispatchGroup()
+            marker.enter()
+            DispatchQueue.main.async { marker.leave() }
+            // The marker follows the queued production callback. Keep pumping
+            // the main run loop until both that callback and its semantic state
+            // are complete, rather than assuming a fixed 20ms was sufficient.
+            while Date() < deadline {
+                if marker.wait(timeout: .now()) == .success && ready() {
+                    check(true, "\(label): queued update completed")
+                    return
+                }
+                _ = RunLoop.current.run(mode: .default, before: min(deadline, Date().addingTimeInterval(0.01)))
+            }
+            print("TIMEOUT \(label): mainQueueMarker=\(marker.wait(timeout: .now()) == .success), semanticStateReady=\(ready())")
+            check(false, "\(label): queued update completed within the bounded deadline")
+        }
         Store.shared.set(key: "CPU_processes", value: 10)
         print("Creating the production CPU popup")
         let popup = Popup(.CPU)
@@ -77,7 +117,9 @@ private struct CPUPopupLayoutChecks {
         check(popup.popupSection("frequency")?.frame.height == 0,
               "frequency is configurable before telemetry arrives without reserving empty space")
         popup.frequencyCallback(CPU_Frequency(value: 2301, eCore: 2495, pCore: 2009))
-        drain()
+        awaitMainUpdate("first frequency sample") {
+            popup.hasRenderedFrequency(2301)
+        }
         layout("first frequency sample")
         check(popup.popupSection("frequency") != nil, "frequency registers as a configurable section")
         let defaultOrder = ["dashboard", "history", "details", "average", "frequency", "processes"]
@@ -101,7 +143,9 @@ private struct CPUPopupLayoutChecks {
         for count in [0, 3, 20, 8, 10] {
             Store.shared.set(key: "CPU_processes", value: count)
             popup.numberOfProcessesUpdated()
-            drain()
+            awaitMainUpdate("\(count) process rows") {
+                popup.hasProcessRows(count)
+            }
             layout("\(count) process rows")
             check(popup.arrangedSubviews.count == 6, "replacing processes keeps exactly six sections")
         }
@@ -111,7 +155,9 @@ private struct CPUPopupLayoutChecks {
         let restored = Popup(.CPU)
         let secondHost = PopupWindow(title: "CPU", module: .CPU, view: restored, visibilityCallback: { _ in })
         restored.frequencyCallback(CPU_Frequency(value: 2100, eCore: 2200, pCore: 1950))
-        drain()
+        awaitMainUpdate("saved layout after late frequency arrival") {
+            restored.hasRenderedFrequency(2100)
+        }
         restored.applySectionLayout()
         secondHost.contentView?.layoutSubtreeIfNeeded()
         restored.layoutSubtreeIfNeeded()

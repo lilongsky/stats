@@ -7,6 +7,7 @@ and author notices. It is not an official Stats release.
 ## Changes
 
 - Independent menu items with per-widget compact sizing, graph dimensions and spacing. CPU and GPU keep their own configurable graph widgets.
+- Repeated Compact launches reuse an earlier registered instance before readers or preferences are initialized, including launches from another build path.
 - Contextual popup application shortcuts, with four configurable slots per module.
 - Popup section visibility and ordering with an actual popup preview.
 - Local SQLite history for four time ranges, mean/peak display and CSV export.
@@ -29,6 +30,9 @@ It retains system menu rendering, keyboard interaction and accessibility, uses
 localized month names and field order, and builds the year list only when opened.
 The calendar checks dispatch native control actions and verify date navigation
 and geometry; they do not drive pointer-based menu tracking or Escape dismissal.
+Live UI checks also opened both native menus, changed the month and year while
+preserving the other field, canceled a menu with Escape without closing the
+popup, and used Today to restore the current month.
 
 ## Settings interface
 
@@ -49,13 +53,21 @@ These changes follow the useful organization seen in iStat Menus: separate
 global and module settings, keep controls with the object they affect, and make
 reset scope clear. Controls are implemented in AppKit; proprietary UI resources
 are not reused. Offscreen checks of the reusable settings views and popup
-editors pass 69 assertions in each of Chinese and English, at 540- and 680-point
+editors pass 71 assertions in each of Chinese and English, at 540- and 680-point
 widths in light and dark appearances. They cover alignment, wrapping, complete
 first/last table rows, section actions, tool choices and size/default/reset
 synchronization. The renderer also exposed and verified a fix for the last
-section row being clipped by automatic table insets. These are isolated views,
-not screenshots of the full application window. Live settings-window visual
-acceptance remains pending because the development Mac is locked.
+section row being clipped by automatic table insets. These renders are isolated
+views. The final Chinese light-appearance application window was also checked
+live: General and CPU module cards fill the pane, section actions and switches
+remain visible, and all four application shortcut rows align within the form.
+
+A subsequent full-window review found that a hidden combined-item preview
+constrained the General page width, while module tab contents and older module
+cards did not fill their viewport. The General scroll view now pins to its
+container; the fixed-width preview has a flexible wrapper, and module panes,
+tabs and cards follow the available width. The ordinary module-stack regression
+covers two cards with different content lengths without manual card widths.
 
 ## Build a separate local application
 
@@ -135,13 +147,20 @@ reopening, saved section order, hide/restore and process-count changes, checking
 content heights and section geometry. Frequency participates in customization
 and defaults to the position before top processes. Its zero-height placeholder
 also makes it configurable before the first telemetry sample. The check passes
-89 assertions, including process counts of 0, 3, 8, 10 and 20.
+96 assertions, including process counts of 0, 3, 8, 10 and 20. The original 89
+layout checks are retained, with seven explicit async-completion checks. The
+helper waits for callback completion instead of assuming a 20 ms run-loop delay.
 
 After the shared settings layout changes, the full build, strict signature
-verification and Gatekeeper preflight passed. The settings checks above, 89 CPU
+verification and Gatekeeper preflight passed. The settings checks above, 96 CPU
 popup checks and 320 calendar checks passed against that final build. The
 settings runner writes offscreen PNGs under the build directory by default;
 it uses isolated preferences and never opens the production settings window.
+
+The final deployed app was also launched from a second build directory while
+the existing copy was running: it returned successfully without initializing a
+second instance. Native menu-bar inspection confirmed one Compact process with
+seven independent items.
 
 ## Implementation provenance and contribution policy
 

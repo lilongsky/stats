@@ -8,6 +8,8 @@ In the Clock calendar, click the year or month in the header to choose it from a
 
 Settings now has a labeled sidebar entry and aligned groups for general options, the menu bar, advanced options and settings data. Each module's popup tools have four independent slots with application names and icons in native macOS menus. Per-widget size and spacing controls stay in sync with compact-mode defaults while preserving custom values; restore buttons apply only to the widget or tools being edited. See [FORK.md](FORK.md#settings-interface) for the validation scope.
 
+Opening another copy of Compact checks for an earlier registered Compact instance and reuses it before initializing readers or settings. Quit Compact first when switching to a newly built version; official Stats keeps its separate application identity.
+
 ## Deployment
 
 Build locally using the steps below. This fork currently has no custom GitHub release binary. The locally validated ZIP is an ad-hoc signed development package, not a notarized public release; validation on one Mac does not establish that another Mac will allow it.
